@@ -1,0 +1,1235 @@
+openapi: 3.1.0
+info:
+  title: OrchestreeAI Unified Enterprise API
+  version: 1.0.0
+  description: >
+    Autonomous AI Workforce Operating System API unifying Human and AI agents
+    with real-time orchestration, omnichannel sales & commerce, enterprise integration fabric,
+    ABAC data governance, continuous learning, and multi-tier analytics across Master PRD,
+    Addendum 1, and Addendum 2.
+  contact:
+    name: OrchestreeAI Enterprise Architecture Team
+    email: api-support@orchestree.ai
+    url: https://orchestree.ai/developers
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+servers:
+  - url: https://api.orchestree.ai/api/v1
+    description: Production Multi-Tenant Cloud Gateway
+  - url: https://sandbox.orchestree.ai/api/v1
+    description: Enterprise Sandbox & Testing Environment
+  - url: http://localhost:8080/api/v1
+    description: Local Ktor / Microservices Development Gateway
+
+tags:
+  - name: Identity & Access
+    description: Multi-tenant provisioning, OIDC/OAuth2 auth, JWT rotation, session management, and RBAC matrix.
+  - name: Workforce & Organization
+    description: Human and AI Workforce coordination, 15 Standardized AI Job Titles, Kanban Task Board, attendance, and organigram.
+  - name: Omnichannel Sales & Commerce
+    description: Multi-Channel accounts, Unified Customer Profile, Conversational Sales Engine, Cart, Order, Payment, Courier Shipping, and Campaigns.
+  - name: Enterprise Integration & ABAC
+    description: Third-Party Integration Fabric (ERP/HRIS/CRM), Attribute-Based Access Control (Default-Deny), Activity Stream, Knowledge Rules, and Data Quality Center.
+  - name: Analytics & Intelligence
+    description: AI Chief of Staff briefings, Competitor Intelligence, Real-time Revenue Attribution, Continuous Learning metrics, and MCP Tool Registry.
+
+security:
+  - BearerAuth: []
+  - TenantHeader: []
+
+paths:
+  # ==========================================
+  # DOMAIN 1: IDENTITY & ACCESS
+  # ==========================================
+  /auth/login:
+    post:
+      tags:
+        - Identity & Access
+      summary: Authenticate user & issue access/refresh tokens
+      description: Validates user credentials with bcrypt/Argon2, enforces tenant isolation, and issues role-scoped JWT tokens.
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: "owner@mining-corp.co.id"
+              password: "SecurePassword123!"
+              tenantDomain: "mining-corp"
+      responses:
+        '200':
+          description: Login successful with JWT & user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+              example:
+                accessToken: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                refreshToken: "ref_7a9f8b1c4e2d3f6a5b8c9d0e"
+                tokenType: "Bearer"
+                expiresInSeconds: 900
+                user:
+                  id: "usr_998124"
+                  tenantId: "tenant_mining_01"
+                  email: "owner@mining-corp.co.id"
+                  name: "Budi Pratama"
+                  role: "TENANT_OWNER"
+                  capabilities: ["dashboard.view", "workforce.manage", "integration.manage", "enterprise.chief_of_staff.view"]
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/onboard:
+    post:
+      tags:
+        - Identity & Access
+      summary: Onboard new tenant organization
+      description: Automated tenant provisioning with dedicated RLS namespace, default roles, initial owner, and subscription plan setup.
+      operationId: onboardTenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TenantOnboardRequest'
+            example:
+              companyName: "PT Nusantara Prima Energi"
+              domain: "nusantara-energi"
+              adminEmail: "director@nusantara-energi.co.id"
+              adminName: "Ir. Hendra Gunawan"
+              adminPassword: "EnterprisePassword2026!"
+              selectedPlanId: "plan_enterprise_custom"
+      responses:
+        '201':
+          description: Tenant onboarded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /tenants/{id}/context:
+    get:
+      tags:
+        - Identity & Access
+      summary: Get active tenant header context
+      description: Retrieves tenant status, tier level, notification counter, and accessible organizations.
+      operationId: getTenantContext
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "tenant_mining_01"
+      responses:
+        '200':
+          description: Tenant context retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantContextResponse'
+              example:
+                tenantId: "tenant_mining_01"
+                tenantName: "PT Mineral Nusa Persada"
+                tenantDomain: "mineral-nusa"
+                activePlan: "Enterprise Pro"
+                tierLevel: 3
+                unreadNotificationsCount: 4
+
+  # ==========================================
+  # DOMAIN 2: WORKFORCE & ORGANIZATION
+  # ==========================================
+  /tenants/{id}/departments:
+    get:
+      tags:
+        - Workforce & Organization
+      summary: List all departments in tenant
+      description: Retrieves department hierarchy with staff counts, active AI agents, and live task aggregates.
+      operationId: listDepartments
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Department list retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Department'
+              example:
+                - id: "dept_sales_01"
+                  tenantId: "tenant_mining_01"
+                  name: "Sales & Commercial"
+                  description: "Omnichannel B2B/B2C sales, enterprise contracts & customer closing"
+                  managerUserId: "usr_4021"
+                  colorTag: "#1E6FE0"
+                  humanStaffCount: 8
+                  aiAgentCount: 4
+                  activeTaskCount: 19
+
+    post:
+      tags:
+        - Workforce & Organization
+      summary: Create new department
+      operationId: createDepartment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDepartmentRequest'
+      responses:
+        '201':
+          description: Department created
+
+  /tenants/{id}/agents:
+    get:
+      tags:
+        - Workforce & Organization
+      summary: List AI Agents in workforce
+      description: Lists active digital agents mapped to the Standardized 15 Job Title Catalog.
+      operationId: listAiAgents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: AI Agent list retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AiAgent'
+              example:
+                - id: "agent_sdr_01"
+                  tenantId: "tenant_mining_01"
+                  jobTitleId: "job_ai_sales"
+                  jobTitleName: "AI Sales"
+                  structuralRoleName: "AI SDR"
+                  personaType: "SDR"
+                  departmentId: "dept_sales_01"
+                  status: "WORKING"
+                  skillConfidenceScore: 94.5
+                  assignedTasksCount: 6
+
+    post:
+      tags:
+        - Workforce & Organization
+      summary: Create AI Agent from Standardized Catalog
+      description: Enforces non-free-text job title selection with automatic capability and tool auto-wiring.
+      operationId: createAiAgent
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAiAgentRequest'
+            example:
+              jobTitleId: "job_ai_sales"
+              structuralRoleId: "role_ai_sdr"
+              departmentId: "dept_sales_01"
+      responses:
+        '201':
+          description: AI Agent created with standard skills attached
+
+  /tenants/{id}/tasks:
+    get:
+      tags:
+        - Workforce & Organization
+      summary: List Kanban tasks with live filter
+      operationId: listTasks
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: departmentId
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: column
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [BACKLOG, TODO, IN_PROGRESS, REVIEW, DONE]
+      responses:
+        '200':
+          description: Tasks retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaskItem'
+
+  /tasks/{taskId}/move:
+    patch:
+      tags:
+        - Workforce & Organization
+      summary: Move task column with optimistic locking
+      operationId: moveTaskColumn
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MoveTaskRequest'
+            example:
+              toColumn: "REVIEW"
+              version: 4
+      responses:
+        '200':
+          description: Task moved and broadcasted via WebSocket
+
+  # ==========================================
+  # DOMAIN 3: OMNICHANNEL SALES & COMMERCE
+  # ==========================================
+  /tenants/{id}/channel-accounts:
+    get:
+      tags:
+        - Omnichannel Sales & Commerce
+      summary: List multi-channel accounts
+      description: Retrieves all connected WhatsApp, Telegram, IG, TikTok, and Marketplace accounts under single tenant credit wallet.
+      operationId: listChannelAccounts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Channel accounts list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ChannelAccount'
+              example:
+                - id: "ca_wa_sales_sby"
+                  tenantId: "tenant_mining_01"
+                  channelType: "WHATSAPP"
+                  accountLabel: "WhatsApp Sales Surabaya"
+                  status: "ACTIVE"
+                  connectedByUserId: "usr_4021"
+                  assignedPersonas: ["SDR", "CLOSER"]
+                  monthlyUsageCredits: 1420
+
+  /tenants/{id}/customers/search:
+    get:
+      tags:
+        - Omnichannel Sales & Commerce
+      summary: Search Unified Customer Profile
+      description: Performs exact/strong/weak identity resolution across phone, email, and social identifiers.
+      operationId: searchCustomers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          example: "+6281234567890"
+      responses:
+        '200':
+          description: Customer profile matching result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerProfile'
+              example:
+                id: "cust_7721"
+                tenantId: "tenant_mining_01"
+                displayName: "PT Semen Perkasa (Bpk. Anton)"
+                primaryChannel: "WHATSAPP"
+                matchConfidence: "EXACT"
+                funnelStage: "QUALIFIED_LEAD"
+                leadScore: 88
+                totalSpend: 145000000.0
+
+  /tenants/{id}/inbox/conversations:
+    get:
+      tags:
+        - Omnichannel Sales & Commerce
+      summary: Get unified omnichannel inbox messages
+      description: Real-time multi-channel conversational stream with auto intent classification, Handover Summary, and sales stage tracking.
+      operationId: getInboxConversations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: channelType
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Conversation inbox threads
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConversationThread'
+
+  /conversations/{id}/takeover:
+    post:
+      tags:
+        - Omnichannel Sales & Commerce
+      summary: Trigger human takeover (Handover Gate)
+      description: Seamless AI-to-Human handoff with LLM-synthesized context summary and real structured lead data.
+      operationId: takeoverConversation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TakeoverRequest'
+            example:
+              staffId: "usr_4021"
+              reason: "Customer requested commercial discount negotiation >10%"
+      responses:
+        '200':
+          description: Handover executed and HandoverSummary generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoverSummary'
+              example:
+                customerName: "Bpk. Anton"
+                channel: "WHATSAPP"
+                leadScore: 88
+                product: "Excavator Heavy Duty Bucket 20T"
+                intent: "minta_diskon"
+                budgetRange: "Rp 120M - 150M"
+                objection: "Meminta diskon 15% untuk bulk order 3 unit"
+                recommendedNextAction: "Tawarkan garansi spare part 1 tahun sebagai pengganti diskon tunai"
+
+  /tenants/{id}/orders:
+    get:
+      tags:
+        - Omnichannel Sales & Commerce
+      summary: List commerce orders
+      operationId: listOrders
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Order list retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+
+  /payments/webhook/{gateway}:
+    post:
+      tags:
+        - Omnichannel Sales & Commerce
+      summary: Ingest payment gateway webhook
+      description: Verifies cryptographic HMAC signature and transitions order from PAYMENT_PENDING to ORDER_CONFIRMED.
+      operationId: handlePaymentWebhook
+      parameters:
+        - name: gateway
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [midtrans, xendit, stripe]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+            example:
+              order_id: "ORD-2026-9901"
+              transaction_status: "settlement"
+              gross_amount: "45000000.00"
+              signature_key: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      responses:
+        '200':
+          description: Webhook signature verified and payment settled
+
+  # ==========================================
+  # DOMAIN 4: ENTERPRISE INTEGRATION & ABAC
+  # ==========================================
+  /tenants/{id}/enterprise-connections:
+    get:
+      tags:
+        - Enterprise Integration & ABAC
+      summary: List enterprise integration connectors
+      description: Tier-gated endpoint retrieving ERP, HRIS, CRM, CMMS, and IoT connectors with real health telemetry.
+      operationId: listEnterpriseConnections
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Enterprise connections list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EnterpriseConnection'
+              example:
+                - id: "conn_sap_erp_01"
+                  tenantId: "tenant_mining_01"
+                  systemType: "ERP"
+                  connectorKind: "SAP_S4HANA_ODATA"
+                  status: "HEALTHY"
+                  syncMode: "NEAR_REAL_TIME"
+                  lastSyncAt: "2026-08-23T19:45:00Z"
+                  ingestedRecordsCount: 42100
+
+  /tenants/{id}/ai-data-permissions:
+    get:
+      tags:
+        - Enterprise Integration & ABAC
+      summary: List AI Data Permission (ABAC) policies
+      description: Retrieves fine-grained default-deny attribute-based data access policies per AI Persona and system connection.
+      operationId: listAbacPolicies
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: ABAC policies retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AbacPolicy'
+              example:
+                - id: "abac_maint_cmms_01"
+                  tenantId: "tenant_mining_01"
+                  aiAgentPersonaType: "MAINTENANCE_AGENT"
+                  connectionId: "conn_cmms_01"
+                  dataScope: ["equipment", "work_orders", "telemetry_vibration"]
+                  accessLevel: "RECOMMEND"
+                  grantedBy: "usr_998124"
+
+    post:
+      tags:
+        - Enterprise Integration & ABAC
+      summary: Create or update ABAC policy
+      operationId: setAbacPolicy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAbacPolicyRequest'
+      responses:
+        '201':
+          description: ABAC Policy created
+
+  /tenants/{id}/activity-stream:
+    get:
+      tags:
+        - Enterprise Integration & ABAC
+      summary: Stream enterprise unified activity feed
+      description: Real-time chronological activity feed aggregated from all normalized ingested records across SAP, CMMS, Fleet, and Finance.
+      operationId: getActivityStream
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Unified activity stream
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActivityStreamItem'
+              example:
+                - id: "act_9011"
+                  sourceSystem: "CMMS"
+                  activityType: "EQUIPMENT_WARNING"
+                  entityReference: "EX-03"
+                  summaryText: "Excavator EX-03 hydraulic pressure abnormal (285 bar > 250 bar threshold)"
+                  occurredAt: "2026-08-23T19:30:00Z"
+                  dataMode: "REAL_TIME"
+
+  /tenants/{id}/knowledge-rules:
+    get:
+      tags:
+        - Enterprise Integration & ABAC
+      summary: List Knowledge Rules (SOP vs Live Data Fusion)
+      description: Machine-executable business SOP compliance rules evaluated continuously by the AI Event Engine.
+      operationId: listKnowledgeRules
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Knowledge Rules list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/KnowledgeRule'
+              example:
+                - id: "krule_maint_500h"
+                  tenantId: "tenant_mining_01"
+                  entityType: "HEAVY_EQUIPMENT"
+                  condition: "operating_hours_since_service"
+                  thresholdValue: 500.0
+                  sopReference: "SOP-MAINT-HE-04"
+                  description: "Preventive maintenance required every 500 operating hours"
+                  isActive: true
+
+  # ==========================================
+  # DOMAIN 5: ANALYTICS & INTELLIGENCE
+  # ==========================================
+  /tenants/{id}/chief-of-staff/briefings:
+    get:
+      tags:
+        - Analytics & Intelligence
+      summary: Get AI Chief of Staff Executive Briefing
+      description: Enterprise synthesis briefing uniting all 15 Specialist Agents and Human workforce metrics with verifiable provenance grounding.
+      operationId: getChiefOfStaffBriefings
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: period
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DAILY, WEEKLY, MONTHLY]
+      responses:
+        '200':
+          description: Executive briefing retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChiefOfStaffBriefing'
+              example:
+                id: "briefing_2026_w34"
+                tenantId: "tenant_mining_01"
+                briefingType: "WEEKLY"
+                period: "2026-W34"
+                executiveSummary: "Operasi tambang minggu ke-34 stabil dengan target produksi 98.4%. Terdeteksi korelasi downtime EX-03 dan penurunan produktivitas Pit B. Disarankan percepatan pergantian seal hidrolik sebelum jadwal overhaul."
+                companyHealthScore: 92.4
+                contributingAgentsCount: 8
+                generatedAt: "2026-08-23T18:00:00Z"
+                provenanceGroundingRatio: 1.0
+
+  /tenants/{id}/analytics/revenue-intelligence:
+    get:
+      tags:
+        - Analytics & Intelligence
+      summary: Get First-Touch Revenue Attribution & Sales Analytics
+      description: Computes strictly reproducible revenue attribution from paid orders joined against conversation entry points.
+      operationId: getRevenueIntelligence
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Revenue intelligence report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevenueIntelligenceReport'
+              example:
+                totalAttributedRevenue: 845000000.0
+                totalConvertedCustomers: 48
+                channelBreakdown:
+                  - channel: "WHATSAPP"
+                    revenue: 520000000.0
+                    conversions: 31
+                  - channel: "INSTAGRAM_DM"
+                    revenue: 210000000.0
+                    conversions: 12
+                  - channel: "SHOPEE"
+                    revenue: 115000000.0
+                    conversions: 5
+                topConvertingPersona: "AI Closer (Budi Sales)"
+
+  /tenants/{id}/mcp-tools:
+    get:
+      tags:
+        - Analytics & Intelligence
+      summary: List Model Context Protocol (MCP) Tools
+      description: Catalog of standardized external MCP tools with risk tiering (LOW, MEDIUM, HIGH) and kill-switch state.
+      operationId: listMcpTools
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: MCP tools retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/McpTool'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Standard JWT Access Token containing user_id, tenant_id, role, and capabilities.
+    TenantHeader:
+      type: apiKey
+      in: header
+      name: X-Tenant-Id
+      description: Tenant organization identifier matched against JWT token claims for defense-in-depth RLS.
+
+  responses:
+    UnauthorizedError:
+      description: Authentication failed or token expired
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: "https://orchestree.ai/errors/unauthorized"
+            title: "Unauthorized"
+            status: 401
+            detail: "Invalid credentials or expired JWT session"
+    ForbiddenTierError:
+      description: Feature tier gating denied request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+          example:
+            type: "https://orchestree.ai/errors/capability-denied"
+            title: "Capability Not Available In Current Plan"
+            status: 403
+            detail: "Integration Fabric requires Enterprise tier plan"
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        tenantDomain:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [accessToken, refreshToken, user]
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        tokenType:
+          type: string
+          default: "Bearer"
+        expiresInSeconds:
+          type: integer
+        user:
+          $ref: '#/components/schemas/UserProfile'
+
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        role:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+
+    TenantOnboardRequest:
+      type: object
+      required: [companyName, domain, adminEmail, adminName, adminPassword, selectedPlanId]
+      properties:
+        companyName:
+          type: string
+        domain:
+          type: string
+        adminEmail:
+          type: string
+        adminName:
+          type: string
+        adminPassword:
+          type: string
+        selectedPlanId:
+          type: string
+
+    TenantContextResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+        tenantName:
+          type: string
+        tenantDomain:
+          type: string
+        activePlan:
+          type: string
+        tierLevel:
+          type: integer
+        unreadNotificationsCount:
+          type: integer
+
+    Department:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        managerUserId:
+          type: string
+        colorTag:
+          type: string
+        humanStaffCount:
+          type: integer
+        aiAgentCount:
+          type: integer
+        activeTaskCount:
+          type: integer
+
+    CreateDepartmentRequest:
+      type: object
+      required: [name, colorTag]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        managerUserId:
+          type: string
+        colorTag:
+          type: string
+
+    AiAgent:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        jobTitleId:
+          type: string
+        jobTitleName:
+          type: string
+        structuralRoleName:
+          type: string
+        personaType:
+          type: string
+        departmentId:
+          type: string
+        status:
+          type: string
+        skillConfidenceScore:
+          type: number
+        assignedTasksCount:
+          type: integer
+
+    CreateAiAgentRequest:
+      type: object
+      required: [jobTitleId, departmentId]
+      properties:
+        jobTitleId:
+          type: string
+        structuralRoleId:
+          type: string
+        departmentId:
+          type: string
+
+    TaskItem:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        column:
+          type: string
+        priority:
+          type: string
+        assigneeType:
+          type: string
+        assigneeId:
+          type: string
+        progressPercentage:
+          type: integer
+
+    MoveTaskRequest:
+      type: object
+      required: [toColumn]
+      properties:
+        toColumn:
+          type: string
+        version:
+          type: integer
+
+    ChannelAccount:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        channelType:
+          type: string
+        accountLabel:
+          type: string
+        status:
+          type: string
+        connectedByUserId:
+          type: string
+        assignedPersonas:
+          type: array
+          items:
+            type: string
+        monthlyUsageCredits:
+          type: integer
+
+    CustomerProfile:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        displayName:
+          type: string
+        primaryChannel:
+          type: string
+        matchConfidence:
+          type: string
+        funnelStage:
+          type: string
+        leadScore:
+          type: integer
+        totalSpend:
+          type: number
+
+    ConversationThread:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        customerId:
+          type: string
+        customerName:
+          type: string
+        channelType:
+          type: string
+        currentIntent:
+          type: string
+        salesStage:
+          type: string
+        assignedAgentId:
+          type: string
+        lastMessageText:
+          type: string
+
+    TakeoverRequest:
+      type: object
+      required: [staffId, reason]
+      properties:
+        staffId:
+          type: string
+        reason:
+          type: string
+
+    HandoverSummary:
+      type: object
+      properties:
+        customerName:
+          type: string
+        channel:
+          type: string
+        leadScore:
+          type: integer
+        product:
+          type: string
+        intent:
+          type: string
+        budgetRange:
+          type: string
+        objection:
+          type: string
+        recommendedNextAction:
+          type: string
+
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        orderNumber:
+          type: string
+        customerId:
+          type: string
+        totalAmount:
+          type: number
+        status:
+          type: string
+        createdAt:
+          type: string
+
+    EnterpriseConnection:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        systemType:
+          type: string
+        connectorKind:
+          type: string
+        status:
+          type: string
+        syncMode:
+          type: string
+        lastSyncAt:
+          type: string
+        ingestedRecordsCount:
+          type: integer
+
+    AbacPolicy:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        aiAgentPersonaType:
+          type: string
+        connectionId:
+          type: string
+        dataScope:
+          type: array
+          items:
+            type: string
+        accessLevel:
+          type: string
+        grantedBy:
+          type: string
+
+    CreateAbacPolicyRequest:
+      type: object
+      required: [aiAgentPersonaType, connectionId, dataScope, accessLevel]
+      properties:
+        aiAgentPersonaType:
+          type: string
+        connectionId:
+          type: string
+        dataScope:
+          type: array
+          items:
+            type: string
+        accessLevel:
+          type: string
+
+    ActivityStreamItem:
+      type: object
+      properties:
+        id:
+          type: string
+        sourceSystem:
+          type: string
+        activityType:
+          type: string
+        entityReference:
+          type: string
+        summaryText:
+          type: string
+        occurredAt:
+          type: string
+        dataMode:
+          type: string
+
+    KnowledgeRule:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        entityType:
+          type: string
+        condition:
+          type: string
+        thresholdValue:
+          type: number
+        sopReference:
+          type: string
+        description:
+          type: string
+        isActive:
+          type: boolean
+
+    ChiefOfStaffBriefing:
+      type: object
+      properties:
+        id:
+          type: string
+        tenantId:
+          type: string
+        briefingType:
+          type: string
+        period:
+          type: string
+        executiveSummary:
+          type: string
+        companyHealthScore:
+          type: number
+        contributingAgentsCount:
+          type: integer
+        generatedAt:
+          type: string
+        provenanceGroundingRatio:
+          type: number
+
+    RevenueIntelligenceReport:
+      type: object
+      properties:
+        totalAttributedRevenue:
+          type: number
+        totalConvertedCustomers:
+          type: integer
+        channelBreakdown:
+          type: array
+          items:
+            type: object
+        topConvertingPersona:
+          type: string
+
+    McpTool:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        riskTier:
+          type: string
+        requiresApproval:
+          type: boolean
+        isKillSwitched:
+          type: boolean
+
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string

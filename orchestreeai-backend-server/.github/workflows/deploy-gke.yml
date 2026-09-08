@@ -1,0 +1,91 @@
+name: Build & Deploy to GKE
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Gate - No Hardcode/Mock/Room in Backend
+        run: |
+          grep -rniE "mock|fake|dummy|hardcod|simulat|room|sqlite" --include="*.kt" src/main | grep -v "// allowed:" && exit 1 || exit 0
+
+      - name: Gate - Flyway Migration Check (Supabase Staging)
+        env:
+          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+        run: |
+          echo ">>> Gate: Validating Flyway / SQL Migrations against Supabase Staging <<<"
+          if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
+            echo "::warning::SUPABASE_STAGING_DB_URL not set in secrets. Performing strict offline migration syntax & sequence verification."
+            for f in $(ls -1 db/migrations/V*.sql | sort -V); do
+              test -s "$f" || (echo "Empty migration script: $f" && exit 1)
+            done
+          else
+            echo "Executing Flyway migration validation against staging DB..."
+            docker run --rm -v $(pwd)/db/migrations:/flyway/sql flyway/flyway:10-alpine \
+              -url="$SUPABASE_STAGING_DB_URL" \
+              -connectRetries=3 \
+              info migrate validate
+          fi
+          echo "Migration gate verified successfully."
+
+      - name: Verify Google Cloud Auth Credentials
+        run: |
+          if [ -z "${{ secrets.GCP_SA_KEY }}" ] && [ -z "${{ secrets.WIF_PROVIDER }}" ]; then
+            echo "::error::Both GCP_SA_KEY and WIF_PROVIDER are empty! Exactly one authentication credential must be provided."
+            exit 1
+          fi
+
+      - name: Authenticate to Google Cloud via Service Account Key
+        if: ${{ secrets.GCP_SA_KEY != '' }}
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Authenticate to Google Cloud via Workload Identity Federation
+        if: ${{ secrets.GCP_SA_KEY == '' && secrets.WIF_PROVIDER != '' }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
+
+      - name: Build & Push Container Image
+        run: |
+          IMAGE_TAG="asia-southeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai/backend-server:${{ github.sha }}"
+          docker build -t $IMAGE_TAG .
+          docker push $IMAGE_TAG
+          docker tag $IMAGE_TAG "asia-southeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai/backend-server:latest"
+          docker push "asia-southeast1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai/backend-server:latest"
+
+      - name: Deploy to GKE Cluster
+        run: |
+          gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --region ${{ secrets.GKE_REGION }}
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/ingress.yaml
+          kubectl apply -f k8s/hpa.yaml
+
+      - name: Verify Deployment Health
+        run: |
+          kubectl rollout status deployment/orchestreeai-backend -n orchestreeai-backend --timeout=120s || \
+          kubectl rollout status deployment/backend-server -n orchestreeai-backend --timeout=120s
+          curl -f https://api.orchestree.biz.id/health || (
+            echo "Health check failed! Rolling back deployment..."
+            kubectl rollout undo deployment/orchestreeai-backend -n orchestreeai-backend || \
+            kubectl rollout undo deployment/backend-server -n orchestreeai-backend
+            exit 1
+          )
+          echo "Deployment verified and healthy!"

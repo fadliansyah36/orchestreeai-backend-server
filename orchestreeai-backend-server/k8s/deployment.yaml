@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestreeai-backend
+  namespace: orchestreeai-backend
+  labels:
+    app: orchestreeai-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orchestreeai-backend
+  template:
+    metadata:
+      labels:
+        app: orchestreeai-backend
+    spec:
+      containers:
+        - name: backend-server
+          image: asia-southeast1-docker.pkg.dev/orchestreeai-prod/orchestreeai/backend-server:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15

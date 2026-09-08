@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: orchestreeai-backend-service
+  namespace: orchestreeai-backend
+spec:
+  type: ClusterIP
+  selector:
+    app: orchestreeai-backend
+  ports:
+    - port: 80
+      targetPort: 8080
+      name: http
+

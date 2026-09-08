@@ -1,0 +1,6 @@
+TOTAL TENANTS DI DATABASE: 0
+TOTAL PUBLIC USERS DI DATABASE: 0
+TOTAL AUTH USERS DI DATABASE: 0
+-------------------------------------------------------------------------------------------------------------
+TENANT NAME                      | TENANT ID                    | USER/OWNER EMAIL                 | CREATED AT
+-------------------------------------------------------------------------------------------------------------

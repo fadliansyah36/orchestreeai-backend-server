@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: orchestreeai-backend
+data:
+  PORT: "8080"
+  APPLICATION_ENV: "production"
+  SUPABASE_URL: "https://exfvfyiwftywqjcsofgf.supabase.co"
+  OPENROUTER_BASE_URL: "https://openrouter.ai/api/v1"
+  GROQ_BASE_URL: "https://api.groq.com/openai/v1"
+  DEEPSEEK_API_URL: "https://api.deepseek.com"
+  VIBE_PROSPECTING_API_URL: "https://api.vibeprospecting.com/v1"
+  GPT_IMAGE_2_API_URL: "https://api.apimart.ai/v1/images/generations"

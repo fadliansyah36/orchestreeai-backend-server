@@ -1,0 +1,21 @@
+{
+  "name": "orchestreeai-backend-drizzle",
+  "version": "1.0.0",
+  "description": "Drizzle ORM & Schema Management for OrchestreeAI Backend Server",
+  "main": "drizzle/schema.ts",
+  "scripts": {
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:pull": "drizzle-kit pull",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "drizzle-orm": "^0.33.0",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.24.0",
+    "typescript": "^5.5.0"
+  }
+}

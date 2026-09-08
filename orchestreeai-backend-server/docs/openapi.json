@@ -1,0 +1,581 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "OrchestreeAI Unified Enterprise API",
+    "version": "1.0.0",
+    "description": "Autonomous AI Workforce Operating System API unifying Human and AI agents with real-time orchestration, omnichannel sales & commerce, enterprise integration fabric, ABAC data governance, continuous learning, and multi-tier analytics across Master PRD, Addendum 1, and Addendum 2.",
+    "contact": {
+      "name": "OrchestreeAI Enterprise Architecture Team",
+      "email": "api-support@orchestree.ai",
+      "url": "https://orchestree.ai/developers"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "https://www.apache.org/licenses/LICENSE-2.0.html"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.orchestree.ai/api/v1",
+      "description": "Production Multi-Tenant Cloud Gateway"
+    },
+    {
+      "url": "https://sandbox.orchestree.ai/api/v1",
+      "description": "Enterprise Sandbox & Testing Environment"
+    },
+    {
+      "url": "http://localhost:8080/api/v1",
+      "description": "Local Ktor / Microservices Development Gateway"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Identity & Access",
+      "description": "Multi-tenant provisioning, OIDC/OAuth2 auth, JWT rotation, session management, and RBAC matrix."
+    },
+    {
+      "name": "Workforce & Organization",
+      "description": "Human and AI Workforce coordination, 15 Standardized AI Job Titles, Kanban Task Board, attendance, and organigram."
+    },
+    {
+      "name": "Omnichannel Sales & Commerce",
+      "description": "Multi-Channel accounts, Unified Customer Profile, Conversational Sales Engine, Cart, Order, Payment, Courier Shipping, and Campaigns."
+    },
+    {
+      "name": "Enterprise Integration & ABAC",
+      "description": "Third-Party Integration Fabric (ERP/HRIS/CRM), Attribute-Based Access Control (Default-Deny), Activity Stream, Knowledge Rules, and Data Quality Center."
+    },
+    {
+      "name": "Analytics & Intelligence",
+      "description": "AI Chief of Staff briefings, Competitor Intelligence, Real-time Revenue Attribution, Continuous Learning metrics, and MCP Tool Registry."
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": [],
+      "TenantHeader": []
+    }
+  ],
+  "paths": {
+    "/auth/login": {
+      "post": {
+        "tags": ["Identity & Access"],
+        "summary": "Authenticate user & issue access/refresh tokens",
+        "description": "Validates user credentials with bcrypt/Argon2, enforces tenant isolation, and issues role-scoped JWT tokens.",
+        "operationId": "loginUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" },
+              "example": {
+                "email": "owner@mining-corp.co.id",
+                "password": "SecurePassword123!",
+                "tenantDomain": "mining-corp"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful with JWT & user profile",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthResponse" },
+                "example": {
+                  "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ1c3JfOTk4MTI0IiwidGVuYW50SWQiOiJ0ZW5hbnRfbWluaW5nXzAxIiwicm9sZSI6IlRFTkFOV19PV05FUiJ9...",
+                  "refreshToken": "ref_7a9f8b1c4e2d3f6a5b8c9d0e",
+                  "tokenType": "Bearer",
+                  "expiresInSeconds": 900,
+                  "user": {
+                    "id": "usr_998124",
+                    "tenantId": "tenant_mining_01",
+                    "email": "owner@mining-corp.co.id",
+                    "name": "Budi Pratama",
+                    "role": "TENANT_OWNER",
+                    "capabilities": ["dashboard.view", "workforce.manage", "integration.manage", "enterprise.chief_of_staff.view"]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/onboard": {
+      "post": {
+        "tags": ["Identity & Access"],
+        "summary": "Onboard new tenant organization",
+        "description": "Automated tenant provisioning with dedicated RLS namespace, default roles, initial owner, and subscription plan setup.",
+        "operationId": "onboardTenant",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TenantOnboardRequest" },
+              "example": {
+                "companyName": "PT Nusantara Prima Energi",
+                "domain": "nusantara-energi",
+                "adminEmail": "director@nusantara-energi.co.id",
+                "adminName": "Ir. Hendra Gunawan",
+                "adminPassword": "EnterprisePassword2026!",
+                "selectedPlanId": "plan_enterprise_custom"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Tenant onboarded successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuthResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tenants/{id}/departments": {
+      "get": {
+        "tags": ["Workforce & Organization"],
+        "summary": "List all departments in tenant",
+        "description": "Retrieves department hierarchy with staff counts, active AI agents, and live task aggregates.",
+        "operationId": "listDepartments",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Department list retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Department" }
+                },
+                "example": [
+                  {
+                    "id": "dept_sales_01",
+                    "tenantId": "tenant_mining_01",
+                    "name": "Sales & Commercial",
+                    "description": "Omnichannel B2B/B2C sales, enterprise contracts & customer closing",
+                    "managerUserId": "usr_4021",
+                    "colorTag": "#1E6FE0",
+                    "humanStaffCount": 8,
+                    "aiAgentCount": 4,
+                    "activeTaskCount": 19
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tenants/{id}/agents": {
+      "get": {
+        "tags": ["Workforce & Organization"],
+        "summary": "List AI Agents in workforce",
+        "description": "Lists active digital agents mapped to the Standardized 15 Job Title Catalog.",
+        "operationId": "listAiAgents",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI Agent list retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/AiAgent" }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Workforce & Organization"],
+        "summary": "Create AI Agent from Standardized Catalog",
+        "description": "Enforces non-free-text job title selection with automatic capability and tool auto-wiring.",
+        "operationId": "createAiAgent",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateAiAgentRequest" },
+              "example": {
+                "jobTitleId": "job_ai_sales",
+                "structuralRoleId": "role_ai_sdr",
+                "departmentId": "dept_sales_01"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "AI Agent created"
+          }
+        }
+      }
+    },
+    "/tenants/{id}/channel-accounts": {
+      "get": {
+        "tags": ["Omnichannel Sales & Commerce"],
+        "summary": "List multi-channel accounts",
+        "description": "Retrieves all connected WhatsApp, Telegram, IG, TikTok, and Marketplace accounts under single tenant credit wallet.",
+        "operationId": "listChannelAccounts",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Channel accounts list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ChannelAccount" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tenants/{id}/customers/search": {
+      "get": {
+        "tags": ["Omnichannel Sales & Commerce"],
+        "summary": "Search Unified Customer Profile",
+        "description": "Performs exact/strong/weak identity resolution across phone, email, and social identifiers.",
+        "operationId": "searchCustomers",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "query", "in": "query", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer profile result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CustomerProfile" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/conversations/{id}/takeover": {
+      "post": {
+        "tags": ["Omnichannel Sales & Commerce"],
+        "summary": "Trigger human takeover (Handover Gate)",
+        "description": "Seamless AI-to-Human handoff with LLM-synthesized context summary and real structured lead data.",
+        "operationId": "takeoverConversation",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TakeoverRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Handover executed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HandoverSummary" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tenants/{id}/enterprise-connections": {
+      "get": {
+        "tags": ["Enterprise Integration & ABAC"],
+        "summary": "List enterprise integration connectors",
+        "description": "Tier-gated endpoint retrieving ERP, HRIS, CRM, CMMS, and IoT connectors with real health telemetry.",
+        "operationId": "listEnterpriseConnections",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Enterprise connections list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/EnterpriseConnection" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tenants/{id}/ai-data-permissions": {
+      "get": {
+        "tags": ["Enterprise Integration & ABAC"],
+        "summary": "List AI Data Permission (ABAC) policies",
+        "description": "Retrieves fine-grained default-deny attribute-based data access policies per AI Persona and system connection.",
+        "operationId": "listAbacPolicies",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "ABAC policies list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/AbacPolicy" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tenants/{id}/chief-of-staff/briefings": {
+      "get": {
+        "tags": ["Analytics & Intelligence"],
+        "summary": "Get AI Chief of Staff Executive Briefing",
+        "description": "Enterprise synthesis briefing uniting all 15 Specialist Agents and Human workforce metrics with verifiable provenance grounding.",
+        "operationId": "getChiefOfStaffBriefings",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Executive briefing retrieved",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChiefOfStaffBriefing" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tenants/{id}/analytics/revenue-intelligence": {
+      "get": {
+        "tags": ["Analytics & Intelligence"],
+        "summary": "Get First-Touch Revenue Attribution & Sales Analytics",
+        "description": "Computes strictly reproducible revenue attribution from paid orders joined against conversation entry points.",
+        "operationId": "getRevenueIntelligence",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Revenue intelligence report",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RevenueIntelligenceReport" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "TenantHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Tenant-Id"
+      }
+    },
+    "schemas": {
+      "LoginRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" },
+          "tenantDomain": { "type": "string" }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "accessToken": { "type": "string" },
+          "refreshToken": { "type": "string" },
+          "tokenType": { "type": "string" },
+          "expiresInSeconds": { "type": "integer" },
+          "user": { "$ref": "#/components/schemas/UserProfile" }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "email": { "type": "string" },
+          "name": { "type": "string" },
+          "role": { "type": "string" },
+          "capabilities": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "TenantOnboardRequest": {
+        "type": "object",
+        "properties": {
+          "companyName": { "type": "string" },
+          "domain": { "type": "string" },
+          "adminEmail": { "type": "string" },
+          "adminName": { "type": "string" },
+          "adminPassword": { "type": "string" },
+          "selectedPlanId": { "type": "string" }
+        }
+      },
+      "Department": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "managerUserId": { "type": "string" },
+          "colorTag": { "type": "string" },
+          "humanStaffCount": { "type": "integer" },
+          "aiAgentCount": { "type": "integer" },
+          "activeTaskCount": { "type": "integer" }
+        }
+      },
+      "AiAgent": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "jobTitleId": { "type": "string" },
+          "jobTitleName": { "type": "string" },
+          "structuralRoleName": { "type": "string" },
+          "personaType": { "type": "string" },
+          "departmentId": { "type": "string" },
+          "status": { "type": "string" },
+          "skillConfidenceScore": { "type": "number" },
+          "assignedTasksCount": { "type": "integer" }
+        }
+      },
+      "CreateAiAgentRequest": {
+        "type": "object",
+        "properties": {
+          "jobTitleId": { "type": "string" },
+          "structuralRoleId": { "type": "string" },
+          "departmentId": { "type": "string" }
+        }
+      },
+      "ChannelAccount": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "channelType": { "type": "string" },
+          "accountLabel": { "type": "string" },
+          "status": { "type": "string" },
+          "connectedByUserId": { "type": "string" },
+          "assignedPersonas": { "type": "array", "items": { "type": "string" } },
+          "monthlyUsageCredits": { "type": "integer" }
+        }
+      },
+      "CustomerProfile": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "displayName": { "type": "string" },
+          "primaryChannel": { "type": "string" },
+          "matchConfidence": { "type": "string" },
+          "funnelStage": { "type": "string" },
+          "leadScore": { "type": "integer" },
+          "totalSpend": { "type": "number" }
+        }
+      },
+      "TakeoverRequest": {
+        "type": "object",
+        "properties": {
+          "staffId": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      },
+      "HandoverSummary": {
+        "type": "object",
+        "properties": {
+          "customerName": { "type": "string" },
+          "channel": { "type": "string" },
+          "leadScore": { "type": "integer" },
+          "product": { "type": "string" },
+          "intent": { "type": "string" },
+          "budgetRange": { "type": "string" },
+          "objection": { "type": "string" },
+          "recommendedNextAction": { "type": "string" }
+        }
+      },
+      "EnterpriseConnection": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "systemType": { "type": "string" },
+          "connectorKind": { "type": "string" },
+          "status": { "type": "string" },
+          "syncMode": { "type": "string" },
+          "lastSyncAt": { "type": "string" },
+          "ingestedRecordsCount": { "type": "integer" }
+        }
+      },
+      "AbacPolicy": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "aiAgentPersonaType": { "type": "string" },
+          "connectionId": { "type": "string" },
+          "dataScope": { "type": "array", "items": { "type": "string" } },
+          "accessLevel": { "type": "string" },
+          "grantedBy": { "type": "string" }
+        }
+      },
+      "ChiefOfStaffBriefing": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "tenantId": { "type": "string" },
+          "briefingType": { "type": "string" },
+          "period": { "type": "string" },
+          "executiveSummary": { "type": "string" },
+          "companyHealthScore": { "type": "number" },
+          "contributingAgentsCount": { "type": "integer" },
+          "generatedAt": { "type": "string" },
+          "provenanceGroundingRatio": { "type": "number" }
+        }
+      },
+      "RevenueIntelligenceReport": {
+        "type": "object",
+        "properties": {
+          "totalAttributedRevenue": { "type": "number" },
+          "totalConvertedCustomers": { "type": "integer" },
+          "channelBreakdown": { "type": "array", "items": { "type": "object" } },
+          "topConvertingPersona": { "type": "string" }
+        }
+      }
+    }
+  }
+}
