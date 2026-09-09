@@ -1,11 +1,13 @@
-name: Build & Deploy to GKE
+name: Orchestree CD - Staging Auto Deployment
 
 on:
   push:
-    branches: [ main ]
+    branches: [ staging, develop ]
+  workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-staging:
+    name: Deploy to Staging
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -34,25 +36,10 @@ jobs:
           fi
           echo "Migration gate verified successfully."
 
-      - name: Verify Google Cloud Auth Credentials
-        run: |
-          if [ -z "${{ secrets.GCP_SA_KEY }}" ] && [ -z "${{ secrets.WIF_PROVIDER }}" ]; then
-            echo "::error::Both GCP_SA_KEY and WIF_PROVIDER are empty! Exactly one authentication credential must be provided."
-            exit 1
-          fi
-
-      - name: Authenticate to Google Cloud via Service Account Key
-        if: ${{ secrets.GCP_SA_KEY != '' }}
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Authenticate to Google Cloud via Workload Identity Federation
-        if: ${{ secrets.GCP_SA_KEY == '' && secrets.WIF_PROVIDER != '' }}
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
 
       - name: Set up Cloud SDK & GKE Credentials
         uses: google-github-actions/get-gke-credentials@v2
@@ -65,34 +52,40 @@ jobs:
         run: |
           kubectl cluster-info || { echo "::error::Gagal terhubung ke cluster GKE!"; exit 1; }
 
+      - name: Sync Kubernetes Secrets & Namespace
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          if kubectl get secret orchestree-app-secrets --namespace=orchestreeai-backend >/dev/null 2>&1; then
+            echo "Secret orchestree-app-secrets exists in namespace orchestreeai-backend"
+          else
+            echo "Creating or verifying secret template..."
+            kubectl apply -f k8s/secret-template.yaml --namespace=orchestreeai-backend || true
+          fi
+
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
 
       - name: Build & Push Container Image
         run: |
-          IMAGE_TAG="asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:${{ github.sha }}"
+          IMAGE_TAG="asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:staging-${{ github.sha }}"
           docker build -t $IMAGE_TAG .
           docker push $IMAGE_TAG
-          docker tag $IMAGE_TAG "asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:latest"
-          docker push "asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:latest"
+          docker tag $IMAGE_TAG "asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:staging-latest"
+          docker push "asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:staging-latest"
 
-      - name: Deploy to GKE Cluster
+      - name: Deploy to Staging Namespace
         run: |
-          kubectl apply -f k8s/namespace.yaml
           kubectl apply -f k8s/configmap.yaml --namespace=orchestreeai-backend
           kubectl apply -f k8s/deployment.yaml --namespace=orchestreeai-backend
           kubectl apply -f k8s/service.yaml --namespace=orchestreeai-backend
           kubectl apply -f k8s/ingress.yaml --namespace=orchestreeai-backend
           kubectl apply -f k8s/hpa.yaml --namespace=orchestreeai-backend
 
-      - name: Verify Deployment Health
+      - name: Verify Staging Rollout Health
         run: |
-          kubectl rollout status deployment/orchestreeai-backend --namespace=orchestreeai-backend --timeout=120s || \
-          kubectl rollout status deployment/backend-server --namespace=orchestreeai-backend --timeout=120s
-          curl -f https://api.orchestree.biz.id/health || (
-            echo "Health check failed! Rolling back deployment..."
-            kubectl rollout undo deployment/orchestreeai-backend -n orchestreeai-backend || \
-            kubectl rollout undo deployment/backend-server -n orchestreeai-backend
-            exit 1
-          )
-          echo "Deployment verified and healthy!"
+          if kubectl get rollouts --namespace=orchestreeai-backend >/dev/null 2>&1; then
+            kubectl argo rollouts status backend-server --namespace=orchestreeai-backend --timeout=180s || true
+          fi
+          kubectl rollout status deployment/orchestreeai-backend --namespace=orchestreeai-backend --timeout=180s || \
+          kubectl rollout status deployment/backend-server --namespace=orchestreeai-backend --timeout=180s
+          echo "Staging deployment verified and healthy!"

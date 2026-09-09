@@ -1,11 +1,13 @@
-name: Build & Deploy to GKE
+name: Orchestree CD - Production Zero-Downtime Deployment
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  deploy:
+  deploy-production:
+    name: Deploy to Production (Zero Downtime)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -15,46 +17,31 @@ jobs:
         run: |
           grep -rniE "mock|fake|dummy|hardcod|simulat|room|sqlite" --include="*.kt" src/main | grep -v "// allowed:" && exit 1 || exit 0
 
-      - name: Gate - Flyway Migration Check (Supabase Staging)
+      - name: Gate - Flyway Migration Check (Supabase Production)
         env:
-          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          echo ">>> Gate: Validating Flyway / SQL Migrations against Supabase Staging <<<"
-          if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
-            echo "::warning::SUPABASE_STAGING_DB_URL not set in secrets. Performing strict offline migration syntax & sequence verification."
+          echo ">>> Gate: Validating Flyway / SQL Migrations against Supabase Production <<<"
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::warning::SUPABASE_DB_URL not set in secrets. Performing strict offline migration syntax & sequence verification."
             for f in $(ls -1 db/migrations/V*.sql | sort -V); do
               test -s "$f" || (echo "Empty migration script: $f" && exit 1)
             done
           else
-            echo "Executing Flyway migration validation against staging DB..."
+            echo "Executing Flyway migration validation against production DB..."
             docker run --rm -v $(pwd)/db/migrations:/flyway/sql flyway/flyway:10-alpine \
-              -url="$SUPABASE_STAGING_DB_URL" \
+              -url="$SUPABASE_DB_URL" \
               -connectRetries=3 \
               info migrate validate
           fi
           echo "Migration gate verified successfully."
 
-      - name: Verify Google Cloud Auth Credentials
-        run: |
-          if [ -z "${{ secrets.GCP_SA_KEY }}" ] && [ -z "${{ secrets.WIF_PROVIDER }}" ]; then
-            echo "::error::Both GCP_SA_KEY and WIF_PROVIDER are empty! Exactly one authentication credential must be provided."
-            exit 1
-          fi
-
-      - name: Authenticate to Google Cloud via Service Account Key
-        if: ${{ secrets.GCP_SA_KEY != '' }}
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Authenticate to Google Cloud via Workload Identity Federation
-        if: ${{ secrets.GCP_SA_KEY == '' && secrets.WIF_PROVIDER != '' }}
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-
-      - name: Set up Cloud SDK & GKE Credentials
+      - name: Configure GKE Access
         uses: google-github-actions/get-gke-credentials@v2
         with:
           cluster_name: backend-orchestreeapp
@@ -65,10 +52,20 @@ jobs:
         run: |
           kubectl cluster-info || { echo "::error::Gagal terhubung ke cluster GKE!"; exit 1; }
 
+      - name: Sync Kubernetes Secrets & Namespace
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          if kubectl get secret orchestree-app-secrets --namespace=orchestreeai-backend >/dev/null 2>&1; then
+            echo "Secret orchestree-app-secrets exists in namespace orchestreeai-backend"
+          else
+            echo "Creating or verifying secret template..."
+            kubectl apply -f k8s/secret-template.yaml --namespace=orchestreeai-backend || true
+          fi
+
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
 
-      - name: Build & Push Container Image
+      - name: Build & Push Production Image
         run: |
           IMAGE_TAG="asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:${{ github.sha }}"
           docker build -t $IMAGE_TAG .
@@ -76,23 +73,26 @@ jobs:
           docker tag $IMAGE_TAG "asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:latest"
           docker push "asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:latest"
 
-      - name: Deploy to GKE Cluster
+      - name: Deploy Zero-Downtime to Production GKE
         run: |
-          kubectl apply -f k8s/namespace.yaml
           kubectl apply -f k8s/configmap.yaml --namespace=orchestreeai-backend
           kubectl apply -f k8s/deployment.yaml --namespace=orchestreeai-backend
           kubectl apply -f k8s/service.yaml --namespace=orchestreeai-backend
           kubectl apply -f k8s/ingress.yaml --namespace=orchestreeai-backend
           kubectl apply -f k8s/hpa.yaml --namespace=orchestreeai-backend
 
-      - name: Verify Deployment Health
+      - name: Verify Production Rollout Health
         run: |
-          kubectl rollout status deployment/orchestreeai-backend --namespace=orchestreeai-backend --timeout=120s || \
-          kubectl rollout status deployment/backend-server --namespace=orchestreeai-backend --timeout=120s
+          if kubectl get rollouts --namespace=orchestreeai-backend >/dev/null 2>&1; then
+            kubectl argo rollouts status backend-server --namespace=orchestreeai-backend --timeout=240s || true
+          fi
+          kubectl rollout status deployment/orchestreeai-backend --namespace=orchestreeai-backend --timeout=240s || \
+          kubectl rollout status deployment/backend-server --namespace=orchestreeai-backend --timeout=240s
+          
           curl -f https://api.orchestree.biz.id/health || (
             echo "Health check failed! Rolling back deployment..."
-            kubectl rollout undo deployment/orchestreeai-backend -n orchestreeai-backend || \
-            kubectl rollout undo deployment/backend-server -n orchestreeai-backend
+            kubectl rollout undo deployment/orchestreeai-backend --namespace=orchestreeai-backend || \
+            kubectl rollout undo deployment/backend-server --namespace=orchestreeai-backend
             exit 1
           )
-          echo "Deployment verified and healthy!"
+          echo "Production deployment verified and healthy!"

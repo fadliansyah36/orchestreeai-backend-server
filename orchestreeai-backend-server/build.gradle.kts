@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.shadow)
     application
 }
 
@@ -14,6 +15,22 @@ repositories {
 
 application {
     mainClass.set("ai.orchestree.backend.ApplicationKt")
+}
+
+tasks.jar {
+    archiveClassifier.set("plain")
+    destinationDirectory.set(layout.buildDirectory.dir("plain-libs"))
+}
+
+tasks.shadowJar {
+    archiveBaseName.set("orchestreeai-backend-server")
+    archiveClassifier.set("all")
+    archiveVersion.set("1.0.0")
+    mergeServiceFiles()
+}
+
+tasks.build {
+    dependsOn(tasks.shadowJar)
 }
 
 tasks.named<JavaExec>("run") {
