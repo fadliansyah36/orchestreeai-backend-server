@@ -3,6 +3,10 @@ package ai.orchestree.backend.intelligence
 import ai.orchestree.backend.database.SupabaseClientProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
 
 data class CrossSystemCorrelationResult(
@@ -38,24 +42,38 @@ class CrossSystemCorrelator(
         
         // Query company_activity_stream dari Supabase
         val streamResult = supabase.queryTable(
-            tableName = "company_activity_streams",
+            tableName = "company_activity_stream",
             tenantId = tenantId,
-            select = "id,source_system,summary_text,created_at"
+            select = "id,system_type,summary,created_at",
+            extraParams = mapOf(
+                "entity_reference" to "eq.$entityReference"
+            )
         )
 
-        val records = if (streamResult.isSuccess) {
+        val streamItems: List<Pair<String, String>> = if (streamResult.isSuccess) {
             val raw = streamResult.getOrDefault("[]")
             if (raw.isNotBlank() && raw != "[]") {
-                listOf(
-                    "SAP_ERP" to "PO #9042 Vendor Steel Co Approved",
-                    "CMMS" to "Excavator EX03 Telemetry Warning: Hydraulic Pressure Low"
-                )
+                try {
+                    val parsed = Json.parseToJsonElement(raw)
+                    if (parsed is JsonArray) {
+                        parsed.mapNotNull { elem ->
+                            val obj = elem as? JsonObject ?: return@mapNotNull null
+                            val id = obj["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                            val sysType = obj["system_type"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                            id to sysType
+                        }
+                    } else emptyList()
+                } catch (e: Exception) {
+                    logger.warn("[CORRELATOR] Failed parsing company_activity_stream: ${e.message}")
+                    emptyList()
+                }
             } else emptyList()
         } else {
             emptyList()
         }
 
-        val distinctSystems = records.map { it.first }.distinct()
+        val distinctSystems = streamItems.map { it.second }.distinct()
+        val contributingIds = streamItems.map { it.first }
         val isCorrelated = distinctSystems.size >= 2
 
         if (isCorrelated) {
@@ -64,7 +82,7 @@ class CrossSystemCorrelator(
                 entityReference = entityReference,
                 distinctSystemsCount = distinctSystems.size,
                 distinctSystems = distinctSystems,
-                contributingStreamIds = listOf("act-sap-01", "act-cmms-02"),
+                contributingStreamIds = contributingIds,
                 timeWindowHours = timeWindowHours,
                 summaryInsight = "Terdeteksi anomali operasional cross-system antara ${distinctSystems.joinToString(" & ")} untuk entitas $entityReference.",
                 riskScore = 0.82,
@@ -77,7 +95,7 @@ class CrossSystemCorrelator(
                 entityReference = entityReference,
                 distinctSystemsCount = distinctSystems.size,
                 distinctSystems = distinctSystems,
-                contributingStreamIds = emptyList(),
+                contributingStreamIds = contributingIds,
                 timeWindowHours = timeWindowHours,
                 summaryInsight = "Tidak ditemukan korelasi multi-sistem signifikan untuk entitas $entityReference dalam jendela waktu ${timeWindowHours} jam.",
                 riskScore = 0.1,

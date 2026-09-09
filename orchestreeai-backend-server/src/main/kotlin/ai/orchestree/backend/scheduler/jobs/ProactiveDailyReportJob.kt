@@ -61,18 +61,7 @@ class ProactiveDailyReportJob(
         }.toString()
         supabase.insertRecord("notifications", tenantId, notifPayload)
 
-        // 2. Persist to 'proactive_messages_log'
-        val logId = "pml-${UUID.randomUUID().toString().take(8)}"
-        val logPayload = buildJsonObject {
-            put("id", logId)
-            put("tenant_id", tenantId)
-            put("channel", "IN_APP")
-            put("content", text)
-            put("status", "SENT")
-        }.toString()
-        supabase.insertRecord("proactive_messages_log", tenantId, logPayload)
-
-        // 3. Mark workflow node completed -> moves task to DONE and logs activity
+        // 2. Mark workflow node completed -> moves task to DONE and logs activity
         val execution = WorkflowExecution(
             id = execId,
             tenantId = tenantId,
@@ -110,6 +99,20 @@ class ProactiveDailyReportJob(
         riskEngine: ai.orchestree.backend.intelligence.RiskEngine =
             ai.orchestree.backend.intelligence.RiskEngine()
     ): ProactiveJobResult {
+        if (sub.staffId.isBlank()) {
+            logger.warn("Skipping proactive job for subscription ${sub.id}: staffId is blank and has no associated recipient")
+            return ProactiveJobResult(
+                success = false,
+                staffId = "",
+                scopeType = "UNSPECIFIED",
+                channel = sub.channel.name,
+                messageContent = "",
+                dispatchedAgents = emptyList(),
+                riskPassed = true,
+                status = "SKIPPED_NULL_STAFF"
+            )
+        }
+
         logger.info("Running proactive job with scope enforcement for staff=${sub.staffId}, role=${sub.staffRole}")
 
         if (targetChannelAccount != null) {
@@ -181,10 +184,12 @@ class ProactiveDailyReportJob(
             put("id", "pml-${UUID.randomUUID().toString().take(8)}")
             put("tenant_id", sub.tenantId)
             put("staff_id", sub.staffId)
+            put("staff_name", sub.staffName.ifBlank { "Staff" })
             put("channel", sub.channel.name)
-            put("scope_type", scope.scopeType)
+            put("message_type", "DAILY_BRIEF")
             put("content", message)
             put("status", "DELIVERED")
+            put("agent_sender_name", sub.assignedAgentName.ifBlank { "Proactive Agent" })
         }.toString()
         supabase.insertRecord("proactive_messages_log", sub.tenantId, logPayload)
 

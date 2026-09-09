@@ -7,7 +7,7 @@
 CREATE TABLE IF NOT EXISTS department_ai_collaboration_mapping (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     department_category_id UUID REFERENCES department_categories(id) ON DELETE CASCADE,
-    ai_job_title_id UUID REFERENCES ai_job_titles(id) ON DELETE CASCADE,
+    ai_job_title_id VARCHAR(64) REFERENCES ai_job_titles(id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ DEFAULT now(),
     UNIQUE (department_category_id, ai_job_title_id)
 );
@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS proactive_collaboration_scope (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     staff_id VARCHAR(64) REFERENCES users(id) ON DELETE CASCADE,
     scope_type TEXT NOT NULL CHECK (scope_type IN ('department_scoped', 'executive_full_summary')),
-    collaborating_ai_job_title_ids UUID[],
+    collaborating_ai_job_title_ids TEXT[],
     created_at TIMESTAMPTZ DEFAULT now()
 );
 

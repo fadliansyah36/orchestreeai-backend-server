@@ -15,7 +15,7 @@ jobs:
         run: |
           grep -rniE "mock|fake|dummy|hardcod|simulat|room|sqlite" --include="*.kt" src/main | grep -v "// allowed:" && exit 1 || exit 0
 
-      - name: Gate - Flyway Migration Check (Supabase Staging)
+      - name: Gate - Flyway Migration Check & PostgREST Schema Reload (Supabase Staging)
         env:
           SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
         run: |
@@ -31,8 +31,10 @@ jobs:
               -url="$SUPABASE_STAGING_DB_URL" \
               -connectRetries=3 \
               info migrate validate
+            echo "Reloading PostgREST schema cache..."
+            docker run --rm postgres:16-alpine psql "$SUPABASE_STAGING_DB_URL" -c "NOTIFY pgrst, 'reload schema';"
           fi
-          echo "Migration gate verified successfully."
+          echo "Migration gate and PostgREST schema reload verified successfully."
 
       - name: Verify Google Cloud Auth Credentials
         run: |
