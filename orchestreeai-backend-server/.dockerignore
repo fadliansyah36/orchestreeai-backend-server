@@ -1,0 +1,14 @@
+# Build artifacts and caches
+build/
+.gradle/
+.idea/
+*.hprof
+
+# Git and CI
+.git/
+.github/
+
+# Ensure gradle configuration and version catalog are never ignored
+!gradle/
+!gradle/**
+!*.toml

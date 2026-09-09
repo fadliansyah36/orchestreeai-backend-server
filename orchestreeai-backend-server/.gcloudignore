@@ -1,0 +1,13 @@
+# Cloud Build ignore file
+.gcloudignore
+.git/
+.github/
+build/
+.gradle/
+.idea/
+*.hprof
+
+# Ensure gradle configuration and version catalog are never ignored
+!gradle/
+!gradle/**
+!*.toml
