@@ -1,0 +1,20 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: orchestreeai-backend-ingress
+  namespace: orchestreeai-backend
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    networking.gke.io/managed-certificates: "orchestreeai-backend-ssl"
+spec:
+  rules:
+    - host: api.orchestree.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: orchestreeai-backend-service
+                port:
+                  number: 80
