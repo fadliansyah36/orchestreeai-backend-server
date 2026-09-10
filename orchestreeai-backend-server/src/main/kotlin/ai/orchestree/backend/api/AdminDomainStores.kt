@@ -144,16 +144,34 @@ data class SystemMonitoringOverview(
 object AdminDomainStores {
     // 1. LLM Providers & Image Providers Store (Bagian A)
     val llmProviders = CopyOnWriteArrayList<AdminLlmProviderItem>().apply {
+        val nimModels = ai.orchestree.backend.database.repositories.modelrouter.LlmProviderModelRepository.instance
+            .getActiveModelsForProvider("NVIDIA_NIM").map { it.modelIdentifier }
+        val openRouterModels = ai.orchestree.backend.database.repositories.modelrouter.LlmProviderModelRepository.instance
+            .getActiveModelsForProvider("OPENROUTER").map { it.modelIdentifier }
+
         addAll(
             listOf(
+                AdminLlmProviderItem(
+                    id = "prov-nvidia-nim",
+                    provider = "NVIDIA NIM",
+                    providerType = "NVIDIA_NIM",
+                    models = nimModels,
+                    status = "ACTIVE",
+                    latencyMs = 95,
+                    priority = 1,
+                    taskSpecialization = "frontier_reasoning,complex_analysis",
+                    apiKeySecretRef = "••••••••",
+                    baseUrl = "https://integrate.api.nvidia.com/v1",
+                    isHealthy = true
+                ),
                 AdminLlmProviderItem(
                     id = "prov-openrouter",
                     provider = "OpenRouter",
                     providerType = "OPENROUTER",
-                    models = listOf("deepseek-chat", "gpt-4o", "claude-3-5-sonnet"),
+                    models = openRouterModels,
                     status = "ACTIVE",
                     latencyMs = 240,
-                    priority = 1,
+                    priority = 2,
                     taskSpecialization = "general",
                     apiKeySecretRef = "••••••••",
                     baseUrl = "https://openrouter.ai/api/v1",
@@ -163,10 +181,10 @@ object AdminDomainStores {
                     id = "prov-groq",
                     provider = "Groq",
                     providerType = "GROQ",
-                    models = listOf("llama-3.3-70b-versatile"),
+                    models = emptyList(),
                     status = "ACTIVE",
                     latencyMs = 110,
-                    priority = 2,
+                    priority = 3,
                     taskSpecialization = "speed_inference",
                     apiKeySecretRef = "••••••••",
                     baseUrl = "https://api.groq.com/openai/v1",
@@ -174,22 +192,22 @@ object AdminDomainStores {
                 ),
                 AdminLlmProviderItem(
                     id = "prov-deepseek",
-                    provider = "DeepSeek",
+                    provider = "DeepSeek (Disabled)",
                     providerType = "DEEPSEEK",
-                    models = listOf("deepseek-chat", "deepseek-reasoner"),
-                    status = "ACTIVE",
+                    models = emptyList(),
+                    status = "DISABLED",
                     latencyMs = 380,
-                    priority = 3,
-                    taskSpecialization = "reasoning",
+                    priority = 99,
+                    taskSpecialization = "legacy",
                     apiKeySecretRef = "••••••••",
                     baseUrl = "https://api.deepseek.com/v1",
-                    isHealthy = true
+                    isHealthy = false
                 ),
                 AdminLlmProviderItem(
                     id = "prov-apimart",
                     provider = "Apimart",
                     providerType = "CUSTOM_OPENAI",
-                    models = listOf("gpt-4o-mini", "claude-3-haiku"),
+                    models = emptyList(),
                     status = "ACTIVE",
                     latencyMs = 420,
                     priority = 4,

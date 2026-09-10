@@ -110,11 +110,13 @@ class OpenAiCompatibleLlmClient(
         }
     }
 
-    private fun calculateEstimatedCost(provider: String, model: String, promptTokens: Int, completionTokens: Int): Double {
+    fun calculateEstimatedCost(provider: String, model: String, promptTokens: Int, completionTokens: Int): Double {
+        val p = provider.lowercase()
         return when {
-            provider == "deepseek" -> (promptTokens * 0.00000014) + (completionTokens * 0.00000028)
-            provider == "groq" -> (promptTokens * 0.00000005) + (completionTokens * 0.00000008)
-            provider == "openrouter" -> (promptTokens * 0.0000005) + (completionTokens * 0.0000015)
+            p == "nvidia_nim" || p == "nvidia" -> (promptTokens * 0.00000030) + (completionTokens * 0.00000060)
+            p == "deepseek" -> (promptTokens * 0.00000014) + (completionTokens * 0.00000028)
+            p == "groq" -> (promptTokens * 0.00000005) + (completionTokens * 0.00000008)
+            p == "openrouter" -> (promptTokens * 0.0000005) + (completionTokens * 0.0000015)
             else -> 0.0
         }
     }

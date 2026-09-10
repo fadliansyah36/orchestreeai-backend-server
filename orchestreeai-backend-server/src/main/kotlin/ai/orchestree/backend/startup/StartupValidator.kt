@@ -126,9 +126,10 @@ class StartupValidator(
 
         // Also check if any LLM API keys are present in env
         val hasAnyLlmKey = listOf(
-            ai.orchestree.backend.config.EnvLoader.get("DEEPSEEK_API_KEY"),
-            ai.orchestree.backend.config.EnvLoader.get("GROQ_API_KEY"),
+            ai.orchestree.backend.config.EnvLoader.get("NVIDIA_API_KEY"),
             ai.orchestree.backend.config.EnvLoader.get("OPENROUTER_API_KEY"),
+            ai.orchestree.backend.config.EnvLoader.get("GROQ_API_KEY"),
+            ai.orchestree.backend.config.EnvLoader.get("DEEPSEEK_API_KEY"),
             ai.orchestree.backend.config.EnvLoader.get("ANTHROPIC_API_KEY"),
             ai.orchestree.backend.config.EnvLoader.get("GEMINI_API_KEY")
         ).any { it.isNotBlank() }

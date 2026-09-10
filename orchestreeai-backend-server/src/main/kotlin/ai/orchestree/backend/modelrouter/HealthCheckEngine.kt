@@ -21,31 +21,19 @@ class HealthCheckEngine(
         val results = mutableListOf<ProviderHealth>()
         val testReq = LlmRequest(prompt = "ping", maxTokens = 5)
 
-        // Test DeepSeek
-        val startDs = System.currentTimeMillis()
-        val dsRes = modelRouter.deepSeekClient.complete(testReq)
+        // Test NVIDIA NIM (Tier 1 Primary)
+        val startNim = System.currentTimeMillis()
+        val nimRes = modelRouter.nvidiaNimClient.complete(testReq)
         results.add(
             ProviderHealth(
-                providerName = "DeepSeek",
-                isHealthy = dsRes.isSuccess,
-                latencyMs = System.currentTimeMillis() - startDs,
-                errorMessage = dsRes.exceptionOrNull()?.message
+                providerName = "NVIDIA NIM",
+                isHealthy = nimRes.isSuccess,
+                latencyMs = System.currentTimeMillis() - startNim,
+                errorMessage = nimRes.exceptionOrNull()?.message
             )
         )
 
-        // Test Groq
-        val startGroq = System.currentTimeMillis()
-        val groqRes = modelRouter.groqClient.complete(testReq)
-        results.add(
-            ProviderHealth(
-                providerName = "Groq",
-                isHealthy = groqRes.isSuccess,
-                latencyMs = System.currentTimeMillis() - startGroq,
-                errorMessage = groqRes.exceptionOrNull()?.message
-            )
-        )
-
-        // Test OpenRouter
+        // Test OpenRouter (Tier 2 Fallback)
         val startOr = System.currentTimeMillis()
         val orRes = modelRouter.openRouterClient.complete(testReq)
         results.add(
@@ -54,6 +42,18 @@ class HealthCheckEngine(
                 isHealthy = orRes.isSuccess,
                 latencyMs = System.currentTimeMillis() - startOr,
                 errorMessage = orRes.exceptionOrNull()?.message
+            )
+        )
+
+        // Test Groq (Tier 3 Fallback)
+        val startGroq = System.currentTimeMillis()
+        val groqRes = modelRouter.groqClient.complete(testReq)
+        results.add(
+            ProviderHealth(
+                providerName = "Groq",
+                isHealthy = groqRes.isSuccess,
+                latencyMs = System.currentTimeMillis() - startGroq,
+                errorMessage = groqRes.exceptionOrNull()?.message
             )
         )
 

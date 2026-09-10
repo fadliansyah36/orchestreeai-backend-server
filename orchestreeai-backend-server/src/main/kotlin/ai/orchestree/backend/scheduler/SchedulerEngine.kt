@@ -51,7 +51,8 @@ class SchedulerEngine(
     val scheduledSelectionJob: ScheduledSelectionAnalysisJob = ScheduledSelectionAnalysisJob(),
     val deadLetterQueueRepo: DeadLetterQueueRepository = DeadLetterQueueRepository(),
     val creditExpirationJob: CreditExpirationJob = CreditExpirationJob(),
-    val schedulerJobQueueRepo: SchedulerJobQueueRepository = SchedulerJobQueueRepository()
+    val schedulerJobQueueRepo: SchedulerJobQueueRepository = SchedulerJobQueueRepository(),
+    private val tenantRepo: ai.orchestree.backend.database.repositories.identity.TenantRepository = ai.orchestree.backend.database.repositories.identity.TenantRepository.instance
 ) {
     private val logger = LoggerFactory.getLogger(SchedulerEngine::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -135,13 +136,19 @@ class SchedulerEngine(
         // 1. Proactive Daily Report Background Loop
         activeJobs["PROACTIVE_BRIEFING"] = scope.launch {
             while (isActive) {
-                val sampleTenant = "tenant-enterprise-001"
-                executeWithDlq(
-                    jobType = "PROACTIVE_DAILY",
-                    tenantId = sampleTenant,
-                    payload = mapOf("tenantId" to sampleTenant)
-                ) {
-                    proactiveReportJob.execute(sampleTenant)
+                val activeTenants = tenantRepo.getActiveTenantIds()
+                if (activeTenants.isEmpty()) {
+                    logger.info("[SCHEDULER] No active tenants found for proactive briefing")
+                } else {
+                    for (tenantId in activeTenants) {
+                        executeWithDlq(
+                            jobType = "PROACTIVE_DAILY",
+                            tenantId = tenantId,
+                            payload = mapOf("tenantId" to tenantId)
+                        ) {
+                            proactiveReportJob.execute(tenantId)
+                        }
+                    }
                 }
                 delay(proactiveIntervalMs)
             }

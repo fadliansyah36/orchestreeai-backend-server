@@ -1,0 +1,42 @@
+name: Deploy to Production - OrchestreeAI Backend
+on:
+  push: { branches: [main] }
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          # WAJIB salah satu ini TERISI - INI PENYEBAB error
+          # "must specify exactly one of workload_identity_provider or
+          # credentials_json" yang PERNAH terjadi sebelumnya
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Gate - Re-verify No Hardcode (Final Check Before Production)
+        run: |
+          grep -rniE "claude-3|deepseek-chat" --include="*.kt" orchestreeai-backend-server/src/main && exit 1 || exit 0
+
+      - name: Build & Push Image (tag versioned, BUKAN v1 statis)
+        run: |
+          gcloud builds submit --tag asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai-images/backend-server:${{ github.sha }} orchestreeai-backend-server
+
+      - name: Get GKE Credentials
+        run: gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --zone ${{ secrets.GKE_ZONE }}
+
+      - name: Deploy to Production
+        run: |
+          kubectl set image deployment/backend-server \
+            backend-server=asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai-images/backend-server:${{ github.sha }} \
+            -n orchestreeai-backend
+          kubectl rollout status deployment/backend-server -n orchestreeai-backend --timeout=180s
+
+      - name: Verify Production Health & Rollback on Failure
+        run: |
+          sleep 15
+          curl -f https://api.orchestree.biz.id/health || \
+          (kubectl rollout undo deployment/backend-server -n orchestreeai-backend && echo "::error::Deploy gagal, rollback dijalankan." && exit 1)

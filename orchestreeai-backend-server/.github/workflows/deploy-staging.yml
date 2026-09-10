@@ -1,0 +1,35 @@
+name: Deploy to Staging - OrchestreeAI Backend
+on:
+  push: { branches: [staging] }
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Gate - Re-verify No Hardcode (Staging Gate)
+        run: |
+          grep -rniE "claude-3|deepseek-chat" --include="*.kt" src/main && exit 1 || exit 0
+
+      - name: Build & Push Image (tag staging)
+        run: |
+          gcloud builds submit --tag asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai-images/backend-server:staging-${{ github.sha }} .
+
+      - name: Get GKE Credentials
+        run: gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --zone ${{ secrets.GKE_ZONE }}
+
+      - name: Deploy to Staging Namespace
+        run: |
+          kubectl set image deployment/backend-server \
+            backend-server=asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai-images/backend-server:staging-${{ github.sha }} \
+            -n orchestreeai-backend-staging
+          kubectl rollout status deployment/backend-server -n orchestreeai-backend-staging --timeout=180s
+
+      - name: Verify Health After Deploy
+        run: curl -f https://staging-api.orchestree.biz.id/health || (kubectl rollout undo deployment/backend-server -n orchestreeai-backend-staging && exit 1)

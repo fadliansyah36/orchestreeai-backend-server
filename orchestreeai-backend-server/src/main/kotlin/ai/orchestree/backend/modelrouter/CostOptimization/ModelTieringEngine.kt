@@ -1,5 +1,6 @@
 package ai.orchestree.backend.modelrouter.CostOptimization
 
+import ai.orchestree.backend.database.repositories.modelrouter.LlmProviderModelRepository
 import ai.orchestree.backend.database.repositories.modelrouter.ProviderRegistryRepository
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -34,13 +35,24 @@ class ConcurrentRequestCoalescer<T> {
 }
 
 class ModelTieringEngine(
-    private val providerRepo: ProviderRegistryRepository = ProviderRegistryRepository.instance
+    private val providerRepo: ProviderRegistryRepository = ProviderRegistryRepository.instance,
+    private val modelRepo: LlmProviderModelRepository = LlmProviderModelRepository.instance
 ) {
+    fun mapTaskToComplexityTier(taskCategory: String, promptLength: Int): String {
+        val cat = taskCategory.uppercase()
+        return when {
+            cat.contains("FRONTIER") || cat.contains("DEEP_REASONING") || cat.contains("COMPLEX_ANALYSIS") || cat.contains("UNIVERSAL_PROMPT_COMPOSER") -> "frontier"
+            cat.contains("REASONING") || cat.contains("CODE") || cat.contains("AUTONOMOUS") -> "complex"
+            cat.contains("FAST") || cat.contains("CLASSIF") || cat.contains("TRIAGE") || promptLength < 200 -> "simple"
+            else -> "moderate"
+        }
+    }
+
     fun selectOptimalModel(
         taskCategory: String,
         sensitivityTier: String,
         promptLength: Int
-    ): Pair<String, String> { // providerId to defaultModel
+    ): Pair<String, String> { // providerId to modelIdentifier
         if (taskCategory == "IMAGE_GEN") {
             val imgProvider = providerRepo.getActiveImageProvider()
             return imgProvider.providerCode.lowercase() to imgProvider.defaultModel
@@ -48,6 +60,7 @@ class ModelTieringEngine(
 
         val providers = providerRepo.getLlmProvidersOrderedByFallbackPriority()
         val cat = taskCategory.uppercase()
+        val complexityTier = mapTaskToComplexityTier(taskCategory, promptLength)
 
         // 1. Check specialization in active database-registered providers
         val specialized = providers.firstOrNull { p ->
@@ -64,26 +77,17 @@ class ModelTieringEngine(
         }
 
         if (specialized != null) {
-            val defaultModel = when (specialized.providerCode.uppercase()) {
-                "GROQ" -> "llama-3.3-70b-versatile"
-                "DEEPSEEK" -> "deepseek-chat"
-                "OPENROUTER" -> "anthropic/claude-3.5-sonnet"
-                "ANTHROPIC" -> "claude-3-5-sonnet-20241022"
-                else -> "default-model"
-            }
-            return specialized.providerCode.lowercase() to defaultModel
+            val code = specialized.providerCode.lowercase()
+            val candidateModel = modelRepo.getActiveModelsForTier(code, complexityTier)
+                .firstOrNull()?.modelIdentifier ?: specialized.defaultModel
+            return code to candidateModel
         }
 
         // 2. Fallback to top priority provider from database
         val topProvider = providers.firstOrNull()
-        val topCode = topProvider?.providerCode?.lowercase() ?: "openrouter"
-        val topModel = when (topCode) {
-            "openrouter" -> "anthropic/claude-3.5-sonnet"
-            "groq" -> "llama-3.3-70b-versatile"
-            "deepseek" -> "deepseek-chat"
-            "anthropic" -> "claude-3-5-sonnet-20241022"
-            else -> "default-model"
-        }
+        val topCode = topProvider?.providerCode?.lowercase() ?: "nvidia_nim"
+        val topModel = modelRepo.getActiveModelsForTier(topCode, complexityTier)
+            .firstOrNull()?.modelIdentifier ?: topProvider?.defaultModel ?: "meta/llama-3.3-70b-instruct"
         return topCode to topModel
     }
 }

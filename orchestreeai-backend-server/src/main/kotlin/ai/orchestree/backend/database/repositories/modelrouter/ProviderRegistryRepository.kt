@@ -20,6 +20,7 @@ data class LlmProviderEntity(
     val priority: Int,
     val fallbackPriority: Int,
     val taskSpecialization: String,
+    val defaultModel: String = "meta/llama-3.3-70b-instruct",
     val isEnabled: Boolean = true,
     val latencyMs: Long = 120,
     val errorRatePct: Double = 0.1,
@@ -66,13 +67,26 @@ open class ProviderRegistryRepository(
     private fun seedDefaultProviders() {
         val defaultLlm = listOf(
             LlmProviderEntity(
+                id = "llm-nvidia-nim",
+                name = "NVIDIA NIM Microservices Gateway",
+                providerCode = "NVIDIA_NIM",
+                apiBaseUrl = EnvLoader.get("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"),
+                apiKeyEnv = "NVIDIA_API_KEY",
+                priority = 1,
+                fallbackPriority = 1,
+                taskSpecialization = "frontier_reasoning,complex_analysis,code_generation,fast_inference",
+                isEnabled = true,
+                latencyMs = 95,
+                healthStatus = "healthy"
+            ),
+            LlmProviderEntity(
                 id = "llm-openrouter",
                 name = "OpenRouter Unified Gateway",
                 providerCode = "OPENROUTER",
                 apiBaseUrl = EnvLoader.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
                 apiKeyEnv = "OPENROUTER_API_KEY",
-                priority = 1,
-                fallbackPriority = 1,
+                priority = 2,
+                fallbackPriority = 2,
                 taskSpecialization = "cross_provider,fallback,general_reasoning",
                 isEnabled = true,
                 latencyMs = 180,
@@ -84,8 +98,8 @@ open class ProviderRegistryRepository(
                 providerCode = "GROQ",
                 apiBaseUrl = EnvLoader.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
                 apiKeyEnv = "GROQ_API_KEY",
-                priority = 2,
-                fallbackPriority = 2,
+                priority = 3,
+                fallbackPriority = 3,
                 taskSpecialization = "low_latency,fast_classification,triage,sdr",
                 isEnabled = true,
                 latencyMs = 85,
@@ -93,29 +107,29 @@ open class ProviderRegistryRepository(
             ),
             LlmProviderEntity(
                 id = "llm-deepseek",
-                name = "DeepSeek Reasoning Core",
+                name = "DeepSeek Reasoning Core (Disabled)",
                 providerCode = "DEEPSEEK",
                 apiBaseUrl = EnvLoader.get("DEEPSEEK_API_URL", "https://api.deepseek.com"),
                 apiKeyEnv = "DEEPSEEK_API_KEY",
-                priority = 3,
-                fallbackPriority = 3,
-                taskSpecialization = "code_generation,deep_reasoning,complex_analysis",
-                isEnabled = true,
+                priority = 99,
+                fallbackPriority = 99,
+                taskSpecialization = "legacy",
+                isEnabled = false,
                 latencyMs = 160,
-                healthStatus = "healthy"
+                healthStatus = "disabled"
             ),
             LlmProviderEntity(
                 id = "llm-anthropic",
-                name = "Anthropic Claude Core",
+                name = "Anthropic Claude Core (Disabled)",
                 providerCode = "ANTHROPIC",
                 apiBaseUrl = "https://api.anthropic.com/v1",
                 apiKeyEnv = "ANTHROPIC_API_KEY",
-                priority = 4,
-                fallbackPriority = 4,
-                taskSpecialization = "complex_reasoning,creative_composition,restricted",
-                isEnabled = true,
+                priority = 99,
+                fallbackPriority = 99,
+                taskSpecialization = "legacy",
+                isEnabled = false,
                 latencyMs = 240,
-                healthStatus = "healthy"
+                healthStatus = "disabled"
             )
         )
         defaultLlm.forEach { llmCache[it.providerCode.uppercase()] = it }
@@ -252,6 +266,10 @@ open class ProviderRegistryRepository(
 
     open fun getAllActive(): List<LlmProviderEntity> {
         return getLlmProvidersOrderedByFallbackPriority()
+    }
+
+    open fun getAll(): List<LlmProviderEntity> {
+        return llmCache.values.toList()
     }
 
     open fun getImageProviders(): List<ImageProviderEntity> {

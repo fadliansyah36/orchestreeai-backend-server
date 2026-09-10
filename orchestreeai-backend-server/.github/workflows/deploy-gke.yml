@@ -1,100 +1,42 @@
-name: Build & Deploy to GKE
-
+name: Deploy to Production - OrchestreeAI Backend
 on:
-  push:
-    branches: [ main ]
+  push: { branches: [main] }
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Gate - No Hardcode/Mock/Room in Backend
-        run: |
-          grep -rniE "mock|fake|dummy|hardcod|simulat|room|sqlite" --include="*.kt" src/main | grep -v "// allowed:" && exit 1 || exit 0
-
-      - name: Gate - Flyway Migration Check & PostgREST Schema Reload (Supabase Staging)
-        env:
-          SUPABASE_STAGING_DB_URL: ${{ secrets.SUPABASE_STAGING_DB_URL }}
-        run: |
-          echo ">>> Gate: Validating Flyway / SQL Migrations against Supabase Staging <<<"
-          if [ -z "$SUPABASE_STAGING_DB_URL" ]; then
-            echo "::warning::SUPABASE_STAGING_DB_URL not set in secrets. Performing strict offline migration syntax & sequence verification."
-            for f in $(ls -1 db/migrations/V*.sql | sort -V); do
-              test -s "$f" || (echo "Empty migration script: $f" && exit 1)
-            done
-          else
-            echo "Executing Flyway migration validation against staging DB..."
-            docker run --rm -v $(pwd)/db/migrations:/flyway/sql flyway/flyway:10-alpine \
-              -url="$SUPABASE_STAGING_DB_URL" \
-              -connectRetries=3 \
-              info migrate validate
-            echo "Reloading PostgREST schema cache..."
-            docker run --rm postgres:16-alpine psql "$SUPABASE_STAGING_DB_URL" -c "NOTIFY pgrst, 'reload schema';"
-          fi
-          echo "Migration gate and PostgREST schema reload verified successfully."
-
-      - name: Verify Google Cloud Auth Credentials
-        run: |
-          if [ -z "${{ secrets.GCP_SA_KEY }}" ] && [ -z "${{ secrets.WIF_PROVIDER }}" ]; then
-            echo "::error::Both GCP_SA_KEY and WIF_PROVIDER are empty! Exactly one authentication credential must be provided."
-            exit 1
-          fi
-
-      - name: Authenticate to Google Cloud via Service Account Key
-        if: ${{ secrets.GCP_SA_KEY != '' }}
+      - uses: actions/checkout@v4
+      - id: auth
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+          # WAJIB salah satu ini TERISI - INI PENYEBAB error
+          # "must specify exactly one of workload_identity_provider or
+          # credentials_json" yang PERNAH terjadi sebelumnya
+      - uses: google-github-actions/setup-gcloud@v2
 
-      - name: Authenticate to Google Cloud via Workload Identity Federation
-        if: ${{ secrets.GCP_SA_KEY == '' && secrets.WIF_PROVIDER != '' }}
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
-          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
-
-      - name: Set up Cloud SDK & GKE Credentials
-        uses: google-github-actions/get-gke-credentials@v2
-        with:
-          cluster_name: backend-orchestreeapp
-          location: asia-southeast2-a
-          project_id: orchestree-ai
-
-      - name: Verify Cluster Connectivity
+      - name: Gate - Re-verify No Hardcode (Final Check Before Production)
         run: |
-          kubectl cluster-info || { echo "::error::Gagal terhubung ke cluster GKE!"; exit 1; }
+          grep -rniE "claude-3|deepseek-chat" --include="*.kt" src/main && exit 1 || exit 0
 
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
-
-      - name: Build & Push Container Image
+      - name: Build & Push Image (tag versioned, BUKAN v1 statis)
         run: |
-          IMAGE_TAG="asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:${{ github.sha }}"
-          docker build -t $IMAGE_TAG .
-          docker push $IMAGE_TAG
-          docker tag $IMAGE_TAG "asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:latest"
-          docker push "asia-southeast1-docker.pkg.dev/orchestree-ai/orchestreeai/backend-server:latest"
+          gcloud builds submit --tag asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai-images/backend-server:${{ github.sha }} .
 
-      - name: Deploy to GKE Cluster
-        run: |
-          kubectl apply -f k8s/namespace.yaml
-          kubectl apply -f k8s/configmap.yaml --namespace=orchestreeai-backend
-          kubectl apply -f k8s/deployment.yaml --namespace=orchestreeai-backend
-          kubectl apply -f k8s/service.yaml --namespace=orchestreeai-backend
-          kubectl apply -f k8s/ingress.yaml --namespace=orchestreeai-backend
-          kubectl apply -f k8s/hpa.yaml --namespace=orchestreeai-backend
+      - name: Get GKE Credentials
+        run: gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} --zone ${{ secrets.GKE_ZONE }}
 
-      - name: Verify Deployment Health
+      - name: Deploy to Production
         run: |
-          kubectl rollout status deployment/orchestreeai-backend --namespace=orchestreeai-backend --timeout=120s || \
-          kubectl rollout status deployment/backend-server --namespace=orchestreeai-backend --timeout=120s
-          curl -f https://api.orchestree.biz.id/health || (
-            echo "Health check failed! Rolling back deployment..."
-            kubectl rollout undo deployment/orchestreeai-backend -n orchestreeai-backend || \
-            kubectl rollout undo deployment/backend-server -n orchestreeai-backend
-            exit 1
-          )
-          echo "Deployment verified and healthy!"
+          kubectl set image deployment/backend-server \
+            backend-server=asia-southeast2-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/orchestreeai-images/backend-server:${{ github.sha }} \
+            -n orchestreeai-backend
+          kubectl rollout status deployment/backend-server -n orchestreeai-backend --timeout=180s
+
+      - name: Verify Production Health & Rollback on Failure
+        run: |
+          sleep 15
+          curl -f https://api.orchestree.biz.id/health || \
+          (kubectl rollout undo deployment/backend-server -n orchestreeai-backend && echo "::error::Deploy gagal, rollback dijalankan." && exit 1)

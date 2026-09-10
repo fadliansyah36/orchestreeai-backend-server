@@ -51,14 +51,10 @@ class ChannelGateway(
         // Generate Automated Response via ModelRouter with unified retry resilience and Commercial Credit Lifecycle
         val prompt = "Anda adalah Asisten AI Bisnis Pelanggan. Balas pesan pelanggan berikut secara ramah, profesional, dan ringkas:\n'${message.text}'"
         val activeProvider = ai.orchestree.backend.database.repositories.modelrouter.ProviderRegistryRepository.instance
-            .getLlmProvidersOrderedByFallbackPriority().firstOrNull()?.providerCode?.lowercase() ?: "openrouter"
-        val defaultActiveModel = when (activeProvider.uppercase()) {
-            "GROQ" -> "llama-3.3-70b-versatile"
-            "OPENROUTER" -> "anthropic/claude-3.5-sonnet"
-            "DEEPSEEK" -> "deepseek-chat"
-            "ANTHROPIC" -> "claude-3-5-sonnet-20241022"
-            else -> "anthropic/claude-3.5-sonnet"
-        }
+            .getLlmProvidersOrderedByFallbackPriority().firstOrNull()?.providerCode?.lowercase() ?: "nvidia_nim"
+        val defaultActiveModel = ai.orchestree.backend.database.repositories.modelrouter.LlmProviderModelRepository.instance
+            .getActiveModelsForTier(activeProvider, "moderate").firstOrNull()?.modelIdentifier
+            ?: "$activeProvider-default-model"
 
         val replyText = try {
             val costContext = ai.orchestree.backend.billing.CreditCostContext(

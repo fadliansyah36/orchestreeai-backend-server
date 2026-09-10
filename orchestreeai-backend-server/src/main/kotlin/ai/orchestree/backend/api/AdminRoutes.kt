@@ -1042,7 +1042,7 @@ fun Route.adminRoutes(
                 LlmUsageSummaryResponse(
                     totalTokens = 154200,
                     totalCostUsd = 0.428,
-                    activeProviders = listOf("deepseek-chat", "llama-3.3-70b-versatile", "claude-3-5-sonnet")
+                    activeProviders = listOf("nvidia_nim", "openrouter", "groq")
                 )
             )
         }

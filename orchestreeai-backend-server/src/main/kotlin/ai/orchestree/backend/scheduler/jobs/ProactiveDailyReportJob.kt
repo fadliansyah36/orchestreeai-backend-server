@@ -12,14 +12,14 @@ import kotlinx.serialization.json.put
 import org.slf4j.LoggerFactory
 import java.util.UUID
 
-class ProactiveDailyReportJob(
+open class ProactiveDailyReportJob(
     private val modelRouter: ModelRouter = ModelRouter(),
     private val supabase: SupabaseClientProvider = SupabaseClientProvider.fromEnv(),
     private val orchestrationEngine: OrchestrationEngine = OrchestrationEngine()
 ) {
     private val logger = LoggerFactory.getLogger(ProactiveDailyReportJob::class.java)
 
-    suspend fun execute(tenantId: String): String {
+    open suspend fun execute(tenantId: String): String {
         logger.info("Executing Proactive Daily Briefing generation for tenant: $tenantId")
 
         val execId = "exec-brief-${UUID.randomUUID().toString().take(8)}"

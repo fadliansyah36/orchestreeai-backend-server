@@ -542,14 +542,10 @@ class SelectionEngine(
 
         try {
             val activeProvider = ai.orchestree.backend.database.repositories.modelrouter.ProviderRegistryRepository.instance
-                .getLlmProvidersOrderedByFallbackPriority().firstOrNull()?.providerCode?.lowercase() ?: "openrouter"
-            val activeModel = when (activeProvider.uppercase()) {
-                "DEEPSEEK" -> "deepseek-chat"
-                "OPENROUTER" -> "anthropic/claude-3.5-sonnet"
-                "GROQ" -> "llama-3.3-70b-versatile"
-                "ANTHROPIC" -> "claude-3-5-sonnet-20241022"
-                else -> "anthropic/claude-3.5-sonnet"
-            }
+                .getLlmProvidersOrderedByFallbackPriority().firstOrNull()?.providerCode?.lowercase() ?: "nvidia_nim"
+            val activeModel = ai.orchestree.backend.database.repositories.modelrouter.LlmProviderModelRepository.instance
+                .getActiveModelsForTier(activeProvider, "complex").firstOrNull()?.modelIdentifier
+                ?: "$activeProvider-default-model"
             val costContext = ai.orchestree.backend.billing.CreditCostContext(
                 activityType = "ai_selection",
                 modelUsed = activeModel,

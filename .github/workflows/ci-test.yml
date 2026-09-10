@@ -1,0 +1,32 @@
+name: CI Test - OrchestreeAI Backend
+on:
+  pull_request:
+    branches: [main, staging]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17', cache: 'gradle' }
+
+      - name: Gate - No Hardcode Model/Tenant/Mock (REUSE Fase 116/133)
+        run: |
+          RESULT=$(grep -rniE "claude-3|deepseek-chat|anthropic/|tenant-enterprise-001|mock|fake|dummy|hardcod|simulat|room|sqlite" \
+            --include="*.kt" orchestreeai-backend-server/src/main | grep -v "// allowed:" || true)
+          if [ -n "$RESULT" ]; then
+            echo "::error::Pola terlarang ditemukan:"; echo "$RESULT"; exit 1
+          fi
+
+      - name: Gate - No Anthropic/DeepSeek Provider References
+        run: |
+          grep -rn "AnthropicLlmClient\|DeepSeekLlmClient" --include="*.kt" orchestreeai-backend-server/src/main && exit 1 || exit 0
+
+      - name: Run Unit Tests
+        run: ./gradlew test --no-daemon
+
+      - name: Run Migration Dry-Run Against Staging Supabase
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+        run: ./gradlew flywayMigrate -PflywayUrl=$DATABASE_URL
