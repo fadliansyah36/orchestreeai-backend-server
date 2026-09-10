@@ -25,7 +25,7 @@ class WorkflowExecutionRepository(
             val sampleId = "wf-exec-sample-001"
             val originalSnapshot = """
                 {
-                  "tenantId": "tenant-enterprise-001",
+                  "tenantId": "tenant-sample-001",
                   "prompt": "Analyze market trends and prepare executive summary",
                   "briefing": "Executive Briefing: Q3 Revenue +18%",
                   "finalOutput": "Market summary complete. WhatsApp dispatch confirmed.",
@@ -34,7 +34,7 @@ class WorkflowExecutionRepository(
             """.trimIndent()
             val originalExecution = WorkflowExecution(
                 id = sampleId,
-                tenantId = "tenant-enterprise-001",
+                tenantId = "tenant-sample-001",
                 workflowDefId = "executive-briefing-workflow",
                 executionStatus = "completed",
                 currentStateSnapshot = originalSnapshot,

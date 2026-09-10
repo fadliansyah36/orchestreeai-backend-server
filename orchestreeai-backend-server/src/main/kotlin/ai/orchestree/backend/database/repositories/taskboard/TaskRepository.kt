@@ -430,7 +430,7 @@ class TaskRepository(
                         taskId = sampleAiTask.id,
                         tenantId = sampleAiTask.tenantId,
                         fileName = "competitor_price_matrix_sample.csv",
-                        fileUrl = "https://storage.orchestree.biz.id/v1/object/public/file_artifacts/tenant-enterprise-001/competitor_price_matrix_sample.csv",
+                        fileUrl = "https://storage.orchestree.biz.id/v1/object/public/file_artifacts/tenant-sample-001/competitor_price_matrix_sample.csv",
                         fileSizeBytes = 14280L,
                         uploadedBy = "agent-market-intel"
                     )
@@ -729,7 +729,7 @@ class TaskRepository(
         dueDate: String = "",
         priority: String = "MEDIUM",
         workflowExecutionId: String? = null,
-        tenantId: String = "tenant-enterprise-001"
+        tenantId: String = ""
     ): Task {
         val taskId = "tsk-${java.util.UUID.randomUUID().toString().take(8)}"
         val task = Task(
@@ -852,7 +852,7 @@ class TaskActivityLogRepository(
         actorType: String,
         activityType: String,
         description: String,
-        tenantId: String = "tenant-enterprise-001"
+        tenantId: String = ""
     ): TaskActivityLogItem {
         val task = taskRepo.getById(taskId)
         val resolvedTenant = task?.tenantId ?: tenantId

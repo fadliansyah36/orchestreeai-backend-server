@@ -25,14 +25,14 @@ class OrderRepository(
         val now = System.currentTimeMillis()
         // 1. Paid Orders
         val paidOrders = listOf(
-            OrderRecord("ord-01", "tenant-enterprise-001", "cust-01", "ORD-2026-001", 5000000.0, "paid", now - 86400000L),
-            OrderRecord("ord-02", "tenant-enterprise-001", "cust-01", "ORD-2026-002", 2500000.0, "paid", now - 43200000L),
+            OrderRecord("ord-01", "tenant-sample-001", "cust-01", "ORD-2026-001", 5000000.0, "paid", now - 86400000L),
+            OrderRecord("ord-02", "tenant-sample-001", "cust-01", "ORD-2026-002", 2500000.0, "paid", now - 43200000L),
             OrderRecord("ord-03", "tenant-growth-002", "cust-03", "ORD-2026-003", 750000.0, "paid", now - 10800000L),
             OrderRecord("ord-04", "tenant-scale-003", "cust-04", "ORD-2026-004", 3500000.0, "paid", now - 5400000L)
         )
         // 2. Pending Orders (stuck > 10 min vs normal < 10 min)
         val pendingOrders = listOf(
-            OrderRecord("ord-stuck-01", "tenant-enterprise-001", "cust-01", "ORD-2026-091", 1250000.0, "pending_payment", now - (25 * 60 * 1000L)),
+            OrderRecord("ord-stuck-01", "tenant-sample-001", "cust-01", "ORD-2026-091", 1250000.0, "pending_payment", now - (25 * 60 * 1000L)),
             OrderRecord("ord-stuck-02", "tenant-growth-002", "cust-03", "ORD-2026-092", 850000.0, "pending_payment", now - (14 * 60 * 1000L)),
             OrderRecord("ord-recent-01", "tenant-scale-003", "cust-04", "ORD-2026-093", 450000.0, "pending_payment", now - (3 * 60 * 1000L))
         )
@@ -58,7 +58,7 @@ class OrderRepository(
 
     suspend fun create(
         orderId: String,
-        tenantId: String = "tenant-enterprise-001",
+        tenantId: String,
         customerId: String = "cust-001",
         orderNumber: String? = null,
         amount: Double = 0.0,

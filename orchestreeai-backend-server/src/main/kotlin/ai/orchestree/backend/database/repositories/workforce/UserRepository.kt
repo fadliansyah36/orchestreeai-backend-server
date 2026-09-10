@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
 @Serializable
 data class User(
     val id: String,
-    val tenantId: String = "tenant-enterprise-001",
+    val tenantId: String = "",
     val departmentId: String = "sales",
     val teamId: String? = null,
     val name: String = "",
@@ -96,7 +96,7 @@ class UserRepository(
     suspend fun get(userId: String): User {
         return getSync(userId) ?: User(
             id = userId,
-            tenantId = "tenant-enterprise-001",
+            tenantId = "",
             departmentId = "sales",
             name = "User $userId",
             role = "STAFF_HUMAN"

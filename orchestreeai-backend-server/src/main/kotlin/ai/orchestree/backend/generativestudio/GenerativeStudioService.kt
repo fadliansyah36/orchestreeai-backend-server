@@ -44,9 +44,10 @@ class GenerativeStudioService(
     }
 
     suspend fun generateImage(prompt: String): String {
-        val res = modelRouter.gptImage2Client.complete(
-            ai.orchestree.backend.modelrouter.LlmRequest(prompt = prompt, model = "gpt-image-2")
-        )
-        return if (res.isSuccess) res.getOrThrow().text else "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe"
+        val res = modelRouter.generateImage(prompt)
+        if (res.isSuccess) {
+            return res.getOrThrow()
+        }
+        throw res.exceptionOrNull() ?: ai.orchestree.backend.modelrouter.ImageGenerationFailedException()
     }
 }

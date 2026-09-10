@@ -40,7 +40,7 @@ class DeadLetterQueueRepository(
             inMemoryStore[sampleId1] = DeadLetterRecord(
                 id = sampleId1,
                 jobType = "PROACTIVE_DAILY",
-                originalPayload = """{"tenantId":"tenant-enterprise-001","reportType":"EXECUTIVE_MORNING"}""",
+                originalPayload = """{"tenantId":"tenant-sample-001","reportType":"EXECUTIVE_MORNING"}""",
                 failureReason = "HttpConnectTimeoutException: Failed to reach external briefing channel after 3 attempts",
                 failedAt = System.currentTimeMillis() - 3600_000,
                 reprocessed = false
@@ -49,7 +49,7 @@ class DeadLetterQueueRepository(
             inMemoryStore[sampleId2] = DeadLetterRecord(
                 id = sampleId2,
                 jobType = "COMPETITOR_CRAWL",
-                originalPayload = """{"tenantId":"tenant-enterprise-001","url":"https://competitor-retail-x.com"}""",
+                originalPayload = """{"tenantId":"tenant-sample-001","url":"https://competitor-retail-x.com"}""",
                 failureReason = "429 Too Many Requests: Rate limit exceeded on target domain after 3 attempts",
                 failedAt = System.currentTimeMillis() - 7200_000,
                 reprocessed = false

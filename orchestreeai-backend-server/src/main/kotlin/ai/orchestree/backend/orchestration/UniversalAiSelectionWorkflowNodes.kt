@@ -124,7 +124,7 @@ object UniversalAiSelectionWorkflowNodes {
         // Node 4: SELECT (terapkan kriteria)
         engine.registerNode(
             GenericStepWorkflowNode("n4-select", WorkflowNodeType.PLAN, nextNodeId = "n5-score") { ctx ->
-                val tenantId = ctx["tenantId"]?.toString() ?: "tenant-enterprise-001"
+                val tenantId = ctx["tenantId"]?.toString().orEmpty()
                 val promptText = ctx["promptText"]?.toString() ?: "Seleksi data terbaik"
                 val selectionRequestId = ctx["selectionRequestId"]?.toString()
                 val assignedJobTitle = ctx["assignedJobTitle"]?.toString() ?: "agent-procurement-specialist"
@@ -265,7 +265,7 @@ object UniversalAiSelectionWorkflowNodes {
         engine.registerNode(
             GenericStepWorkflowNode("n8-visualize", WorkflowNodeType.PLAN, nextNodeId = "n9-recommend") { ctx ->
                 val selectionRequestId = ctx["selectionRequestId"]?.toString() ?: "req-${UUID.randomUUID().toString().take(8)}"
-                val tenantId = ctx["tenantId"]?.toString() ?: "tenant-enterprise-001"
+                val tenantId = ctx["tenantId"]?.toString().orEmpty()
                 val ranked = (ctx["rankedResults"] as? List<*>)?.filterIsInstance<RankedResult>() ?: emptyList()
                 val dataRows = (ctx["dataRows"] as? List<*>)?.filterIsInstance<DataRow>() ?: emptyList()
                 val criteria = (ctx["criteria"] as? List<*>)?.filterIsInstance<WeightedCriterion>() ?: emptyList()
@@ -335,7 +335,7 @@ object UniversalAiSelectionWorkflowNodes {
         engine.registerNode(
             GenericStepWorkflowNode("n10-result", WorkflowNodeType.DELIVER, nextNodeId = null) { ctx ->
                 val selectionRequestId = ctx["selectionRequestId"]?.toString()
-                val tenantId = ctx["tenantId"]?.toString() ?: "tenant-enterprise-001"
+                val tenantId = ctx["tenantId"]?.toString().orEmpty()
                 val ranked = (ctx["rankedResults"] as? List<*>)?.filterIsInstance<RankedResult>() ?: emptyList()
 
                 if (selectionRequestId != null) {

@@ -33,7 +33,7 @@ class StaffProfileRepository(
         profiles["staff-01"] = StaffProfile(
             id = "staff-01",
             userId = "usr-01",
-            tenantId = "tenant-enterprise-001",
+            tenantId = "tenant-sample-001",
             departmentId = "dept-ops",
             jobTitle = "Operations Manager",
             phone = "+6281234567890",
@@ -42,7 +42,7 @@ class StaffProfileRepository(
         profiles["staff-02"] = StaffProfile(
             id = "staff-02",
             userId = "usr-02",
-            tenantId = "tenant-enterprise-001",
+            tenantId = "tenant-sample-001",
             departmentId = "dept-sales",
             jobTitle = "Account Executive",
             phone = "+6281987654321",

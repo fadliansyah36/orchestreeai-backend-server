@@ -181,6 +181,24 @@ fun Route.selectionRoutes() {
     val autoSelectionRepo = AutoSelectionConfigRepository.defaultInstance
     val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    suspend fun ApplicationCall.requireTenantId(): String? {
+        val principal = this.principal<JWTPrincipal>()
+        val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
+            ?: this.parameters["tenantId"]
+            ?: this.request.headers["X-Tenant-ID"]
+            ?: this.request.headers["X-Tenant-Id"]
+            ?: this.request.queryParameters["tenant_id"]
+
+        if (tenantId.isNullOrBlank()) {
+            this.respond(
+                HttpStatusCode.BadRequest,
+                mapOf("error" to "Tenant ID is required and could not be resolved from authentication context, path parameters, or X-Tenant-ID header")
+            )
+            return null
+        }
+        return tenantId
+    }
+
     route("/selection") {
 
         /**
@@ -191,10 +209,8 @@ fun Route.selectionRoutes() {
          */
         post("/upload") {
             if (!call.enforceEntitlementGate("universal_selection")) return@post
+            val tenantId = call.requireTenantId() ?: return@post
             val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
             val userId = principal?.payload?.getClaim("sub")?.asString()
                 ?: call.request.headers["X-User-Id"]
                 ?: "user-default"
@@ -323,10 +339,8 @@ fun Route.selectionRoutes() {
          * Seleksi tanpa upload, membaca data dari Company Brain (Hybrid Search)
          */
         post("/prompt-only") {
+            val tenantId = call.requireTenantId() ?: return@post
             val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
             val userId = principal?.payload?.getClaim("sub")?.asString()
                 ?: call.request.headers["X-User-Id"]
                 ?: "user-default"
@@ -363,10 +377,8 @@ fun Route.selectionRoutes() {
          * Seleksi dari integrasi database / external API
          */
         post("/api-database") {
+            val tenantId = call.requireTenantId() ?: return@post
             val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
             val userId = principal?.payload?.getClaim("sub")?.asString()
                 ?: call.request.headers["X-User-Id"]
                 ?: "user-default"
@@ -407,10 +419,7 @@ fun Route.selectionRoutes() {
          * GET /api/v1/selection/requests — List all selection requests for tenant
          */
         get("/requests") {
-            val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
+            val tenantId = call.requireTenantId() ?: return@get
 
             val list = selectionRepo.listSelectionRequests(tenantId)
             call.respond(HttpStatusCode.OK, list)
@@ -420,10 +429,7 @@ fun Route.selectionRoutes() {
          * GET /api/v1/selection/{id} — Ambil detail request, kriteria penilaian, dan hasil seleksi/ranking
          */
         get("/{id}") {
-            val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
+            val tenantId = call.requireTenantId() ?: return@get
             val reqId = call.parameters["id"] ?: ""
 
             val request = selectionRepo.getSelectionRequestById(reqId, tenantId)
@@ -449,10 +455,7 @@ fun Route.selectionRoutes() {
          * GET /api/v1/selection/{id}/results — Ambil spesifik hasil evaluasi dan ranking
          */
         get("/{id}/results") {
-            val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
+            val tenantId = call.requireTenantId() ?: return@get
             val reqId = call.parameters["id"] ?: ""
 
             val results = selectionRepo.getSelectionResults(reqId, tenantId)
@@ -463,10 +466,7 @@ fun Route.selectionRoutes() {
          * GET /api/v1/selection/{id}/analytics — Ambil ringkasan analitik dan distribusi
          */
         get("/{id}/analytics") {
-            val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
+            val tenantId = call.requireTenantId() ?: return@get
             val reqId = call.parameters["id"] ?: ""
 
             val analytics = selectionRepo.getSelectionAnalytics(reqId, tenantId)
@@ -517,10 +517,8 @@ fun Route.selectionRoutes() {
          * POST /api/v1/selection/calibration — Buat kalibrasi bobot kriteria oleh pengguna (Bagian D)
          */
         post("/calibration") {
+            val tenantId = call.requireTenantId() ?: return@post
             val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
             val userId = principal?.payload?.getClaim("user_id")?.asString()
                 ?: call.request.headers["X-User-Id"]
                 ?: "user-001"
@@ -554,10 +552,7 @@ fun Route.selectionRoutes() {
          * GET /api/v1/selection/calibration — Daftar konfigurasi kalibrasi tenant
          */
         get("/calibration") {
-            val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
+            val tenantId = call.requireTenantId() ?: return@get
 
             val list = selectionRepo.listCalibrationSettings(tenantId)
             call.respond(HttpStatusCode.OK, list)
@@ -567,10 +562,7 @@ fun Route.selectionRoutes() {
          * GET /api/v1/selection/calibration/{id} — Ambil detail kalibrasi beserta item kriteria bobotnya
          */
         get("/calibration/{id}") {
-            val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
+            val tenantId = call.requireTenantId() ?: return@get
             val calibId = call.parameters["id"] ?: ""
 
             val setting = selectionRepo.getCalibrationSetting(calibId, tenantId)
@@ -589,10 +581,7 @@ fun Route.selectionRoutes() {
          * POST /api/v1/selection/calibration/{id}/validate-dataset/{documentId} — Validasi pemetaan kalibrasi ke dataset
          */
         post("/calibration/{id}/validate-dataset/{documentId}") {
-            val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
+            val tenantId = call.requireTenantId() ?: return@post
             val calibId = call.parameters["id"] ?: ""
             val documentId = call.parameters["documentId"] ?: ""
 
@@ -629,10 +618,8 @@ fun Route.selectionRoutes() {
          * SETIAP aksi tercatat ke selection_audit_log DAN Audit Ledger global.
          */
         post("/results/{id}/review") {
+            val tenantId = call.requireTenantId() ?: return@post
             val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
             val userId = principal?.payload?.getClaim("sub")?.asString()
                 ?: principal?.payload?.getClaim("user_id")?.asString()
                 ?: call.request.headers["X-User-Id"]
@@ -663,10 +650,7 @@ fun Route.selectionRoutes() {
          * TIDAK PERNAH otomatis mengeksekusi aksi lanjutan TANPA human_review_status="approved" eksplisit.
          */
         post("/results/{id}/execute-downstream") {
-            val principal = call.principal<JWTPrincipal>()
-            val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                ?: call.request.headers["X-Tenant-Id"]
-                ?: "tenant-enterprise-001"
+            val tenantId = call.requireTenantId() ?: return@post
             val resultId = call.parameters["id"] ?: ""
 
             val resultRecord = selectionRepo.getSelectionResultById(resultId, tenantId)
@@ -705,10 +689,7 @@ fun Route.selectionRoutes() {
          */
         route("/{id}/export") {
             suspend fun handleExport(call: io.ktor.server.application.ApplicationCall) {
-                val principal = call.principal<JWTPrincipal>()
-                val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                    ?: call.request.headers["X-Tenant-Id"]
-                    ?: "tenant-enterprise-001"
+                val tenantId = call.requireTenantId() ?: return
                 val reqId = call.parameters["id"] ?: ""
                 val format = call.request.queryParameters["format"]?.lowercase() ?: "csv"
 
@@ -746,20 +727,14 @@ fun Route.selectionRoutes() {
          */
         route("/auto-selection") {
             get("/configs") {
-                val principal = call.principal<JWTPrincipal>()
-                val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                    ?: call.request.headers["X-Tenant-Id"]
-                    ?: "tenant-enterprise-001"
+                val tenantId = call.requireTenantId() ?: return@get
 
                 val configs = autoSelectionRepo.getConfigsForTenant(tenantId)
                 call.respond(HttpStatusCode.OK, configs)
             }
 
             post("/configs") {
-                val principal = call.principal<JWTPrincipal>()
-                val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                    ?: call.request.headers["X-Tenant-Id"]
-                    ?: "tenant-enterprise-001"
+                val tenantId = call.requireTenantId() ?: return@post
 
                 val req = call.receive<AutoSelectionConfigCreateRequest>()
                 val config = AutoSelectionFolderConfig(
@@ -777,10 +752,7 @@ fun Route.selectionRoutes() {
             }
 
             delete("/configs/{id}") {
-                val principal = call.principal<JWTPrincipal>()
-                val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-                    ?: call.request.headers["X-Tenant-Id"]
-                    ?: "tenant-enterprise-001"
+                val tenantId = call.requireTenantId() ?: return@delete
                 val id = call.parameters["id"] ?: ""
                 val deleted = autoSelectionRepo.deleteConfig(tenantId, id)
                 if (deleted) {
@@ -817,13 +789,18 @@ fun Route.selectionRoutes() {
                     return@post
                 }
 
-                // Format path bisa "tenant-enterprise-001/recruitment/kandidat.csv" atau "recruitment/kandidat.csv"
+                // Format path bisa "{tenantId}/recruitment/kandidat.csv" atau "recruitment/kandidat.csv"
                 val segments = objectName.split("/").filter { it.isNotBlank() }
                 val resolvedTenantId = when {
                     payload.tenant_id != null -> payload.tenant_id
                     headerTenant != null -> headerTenant
                     segments.size >= 2 && segments[0].startsWith("tenant-") -> segments[0]
-                    else -> "tenant-enterprise-001"
+                    else -> null
+                }
+
+                if (resolvedTenantId.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID is required and could not be resolved from webhook payload or storage path"))
+                    return@post
                 }
 
                 val folderPath = if (segments.size >= 2 && segments[0] == resolvedTenantId) {
@@ -968,7 +945,13 @@ fun Route.selectionRoutes() {
                     return@post
                 }
 
-                val resolvedTenant = payload.tenant_id ?: headerTenant ?: "tenant-enterprise-001"
+                val resolvedTenant = payload.tenant_id
+                    ?: headerTenant
+                    ?: call.request.headers["X-Tenant-ID"]
+                if (resolvedTenant.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID is required and could not be resolved from integration fabric payload or header"))
+                    return@post
+                }
                 val domain = payload.domain ?: "procurement"
                 val assignedJob = SelectionAiJobTitleRegistry.mapDomainToAiJobTitle(domain)
 

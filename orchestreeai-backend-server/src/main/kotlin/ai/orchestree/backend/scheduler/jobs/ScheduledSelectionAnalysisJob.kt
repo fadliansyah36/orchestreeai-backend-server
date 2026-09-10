@@ -23,7 +23,7 @@ class ScheduledSelectionAnalysisJob(
 ) {
     private val logger = LoggerFactory.getLogger(ScheduledSelectionAnalysisJob::class.java)
 
-    suspend fun execute(tenantId: String = "tenant-enterprise-001", payload: Map<String, Any> = emptyMap()): String = withContext(Dispatchers.IO) {
+    suspend fun execute(tenantId: String, payload: Map<String, Any> = emptyMap()): String = withContext(Dispatchers.IO) {
         logger.info("[SCHEDULER:SELECTION] Running scheduled selection analysis for tenant: $tenantId")
 
         val configs = autoSelectionRepo.getConfigsForTenant(tenantId).filter { it.isEnabled }

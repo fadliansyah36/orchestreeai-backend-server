@@ -311,7 +311,7 @@ class BagianCBillingApiComprehensiveTest {
             val repo = CreditRepositoryManager()
             repo.upsertSubscription(testTenant, "plan-starter-001", "active", System.currentTimeMillis(), System.currentTimeMillis() + 86400000, c)
             repo.recordLedgerEntry(testTenant, "TOPUP", 200.0, 200.0, "TASK-1", "test_topup", null, c)
-            repo.recordLedgerEntry(testTenant, "CONSUMED", -50.0, 150.0, "TASK-2", "test_consume", "gpt-4o", c)
+            repo.recordLedgerEntry(testTenant, "CONSUMED", -50.0, 150.0, "TASK-2", "test_consume", "standard", c)
         }
 
         val token = generateToken(testTenant, "user-owner", "TENANT_OWNER")

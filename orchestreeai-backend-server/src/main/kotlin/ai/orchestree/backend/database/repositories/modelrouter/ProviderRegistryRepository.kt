@@ -20,7 +20,7 @@ data class LlmProviderEntity(
     val priority: Int,
     val fallbackPriority: Int,
     val taskSpecialization: String,
-    val defaultModel: String = "meta/llama-3.3-70b-instruct",
+    val defaultModel: String = "",
     val isEnabled: Boolean = true,
     val latencyMs: Long = 120,
     val errorRatePct: Double = 0.1,
@@ -260,8 +260,12 @@ open class ProviderRegistryRepository(
 
     open fun getLlmProvidersOrderedByFallbackPriority(): List<LlmProviderEntity> {
         return llmCache.values
-            .filter { it.isEnabled }
+            .filter { it.isEnabled && it.healthStatus != "disabled" }
             .sortedBy { it.fallbackPriority }
+    }
+
+    open fun getHealthyProvidersForTask(taskCategory: String? = null): List<LlmProviderEntity> {
+        return getLlmProvidersOrderedByFallbackPriority()
     }
 
     open fun getAllActive(): List<LlmProviderEntity> {

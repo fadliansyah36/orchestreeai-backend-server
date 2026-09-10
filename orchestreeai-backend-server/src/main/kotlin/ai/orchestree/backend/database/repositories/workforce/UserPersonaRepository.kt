@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap
 data class UserPersona(
     val id: String = java.util.UUID.randomUUID().toString(),
     val userId: String,
-    val tenantId: String = "tenant-enterprise-001",
+    val tenantId: String = "",
     val displayName: String = "",
     val jobLevel: String = "Staff",
     val jobLevelCode: String = normalizeJobLevelCode(jobLevel),
@@ -101,7 +101,7 @@ class UserPersonaRepository(
     suspend fun getByUserId(userId: String): UserPersona {
         return getByUserIdSync(userId) ?: UserPersona(
             userId = userId,
-            tenantId = "tenant-enterprise-001",
+            tenantId = "",
             displayName = "User $userId",
             jobLevel = "Staff",
             jobLevelCode = "staff"

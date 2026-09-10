@@ -69,7 +69,16 @@ fun Route.authRoutes() {
     route("/auth") {
         post("/login") {
             val req = call.receive<LoginApiRequest>()
-            val resolvedTenantId = req.tenantId ?: "tenant-enterprise-001"
+            val resolvedTenantId = req.tenantId
+                ?: call.request.headers["X-Tenant-ID"]
+                ?: call.request.headers["X-Tenant-Id"]
+            if (resolvedTenantId.isNullOrBlank()) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("error" to "Tenant ID is required and could not be resolved from request body or X-Tenant-ID header")
+                )
+                return@post
+            }
             val userId = "usr-${java.util.UUID.nameUUIDFromBytes(req.email.toByteArray()).toString().take(8)}"
 
             val now = Date()
@@ -101,7 +110,19 @@ fun Route.authRoutes() {
         post("/refresh") {
             val req = call.receive<RefreshApiRequest>()
             val refreshedUserId = "usr-refreshed"
-            val refreshedTenantId = "tenant-enterprise-001"
+            val headerTenant = call.request.headers["X-Tenant-ID"] ?: call.request.headers["X-Tenant-Id"]
+            val refreshedTenantId = try {
+                JWT.decode(req.refreshToken).getClaim("tenant_id")?.asString() ?: headerTenant
+            } catch (_: Exception) {
+                headerTenant
+            }
+            if (refreshedTenantId.isNullOrBlank()) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("error" to "Tenant ID is required and could not be resolved from refresh token or header")
+                )
+                return@post
+            }
             val now = Date()
             val expiresAt = Date(now.time + 3600 * 1000)
 
@@ -167,7 +188,13 @@ fun Route.authRoutes() {
             try {
                 val decoded = JWT.decode(tokenStr)
                 val userId = decoded.subject ?: decoded.getClaim("user_id")?.asString() ?: "usr-current"
-                val tenantId = decoded.getClaim("tenant_id")?.asString() ?: "tenant-enterprise-001"
+                val tenantId = decoded.getClaim("tenant_id")?.asString()
+                    ?: call.request.headers["X-Tenant-ID"]
+                    ?: call.request.headers["X-Tenant-Id"]
+                if (tenantId.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Tenant ID is required and could not be resolved from token claims or headers"))
+                    return@get
+                }
                 val email = decoded.getClaim("email")?.asString() ?: "admin@nusantara.co.id"
                 val name = decoded.getClaim("name")?.asString() ?: email.substringBefore("@").replaceFirstChar { it.uppercase() }
                 call.respond(

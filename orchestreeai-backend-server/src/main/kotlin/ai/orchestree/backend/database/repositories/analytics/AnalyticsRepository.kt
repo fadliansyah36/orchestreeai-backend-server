@@ -717,7 +717,7 @@ class AnalyticsRepository(
             listOf(
                 TaskPerformanceDailyRecord(
                     date = todayStr,
-                    tenantId = tenantId ?: "tenant-enterprise-001",
+                    tenantId = tenantId ?: "",
                     humanTasksCount = 5,
                     aiSelfInitiatedTasksCount = 8,
                     orchestrationTasksCount = 3,
@@ -889,20 +889,22 @@ class AnalyticsRepository(
         // 2. Query Supabase Client REST if JDBC returned empty or failed
         if (allRequests.isEmpty()) {
             try {
-                val res = supabase.queryTable("selection_requests", "tenant-enterprise-001", "select=*")
-                if (res.isSuccess) {
-                    val array = kotlinx.serialization.json.Json.parseToJsonElement(res.getOrThrow()).jsonArray
-                    for (item in array) {
-                        val obj = item.jsonObject
-                        allRequests.add(
-                            RawSelectionReq(
-                                id = obj["id"]?.jsonPrimitive?.content ?: "",
-                                tenantId = obj["tenant_id"]?.jsonPrimitive?.content ?: "",
-                                domainCategory = obj["domain_category"]?.jsonPrimitive?.content,
-                                status = obj["status"]?.jsonPrimitive?.content ?: "processing",
-                                createdAt = obj["created_at"]?.jsonPrimitive?.content
+                for (t in allTenants) {
+                    val res = supabase.queryTable("selection_requests", t.id, "select=*")
+                    if (res.isSuccess) {
+                        val array = kotlinx.serialization.json.Json.parseToJsonElement(res.getOrThrow()).jsonArray
+                        for (item in array) {
+                            val obj = item.jsonObject
+                            allRequests.add(
+                                RawSelectionReq(
+                                    id = obj["id"]?.jsonPrimitive?.content ?: "",
+                                    tenantId = obj["tenant_id"]?.jsonPrimitive?.content ?: t.id,
+                                    domainCategory = obj["domain_category"]?.jsonPrimitive?.content,
+                                    status = obj["status"]?.jsonPrimitive?.content ?: "processing",
+                                    createdAt = obj["created_at"]?.jsonPrimitive?.content
+                                )
                             )
-                        )
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -928,15 +930,15 @@ class AnalyticsRepository(
         // 4. If table is empty on fresh container, seed real baseline records across active tenants
         if (allRequests.isEmpty()) {
             val initialReqs = listOf(
-                RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-enterprise-001", "recruitment", "completed", "2026-09-06T10:00:00Z"),
-                RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-enterprise-001", "supplier", "completed", "2026-09-06T11:30:00Z"),
-                RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-enterprise-001", "tender", "processing", "2026-09-06T12:15:00Z"),
+                RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-corp-001", "recruitment", "completed", "2026-09-06T10:00:00Z"),
+                RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-corp-001", "supplier", "completed", "2026-09-06T11:30:00Z"),
+                RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-corp-001", "tender", "processing", "2026-09-06T12:15:00Z"),
                 RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-growth-002", "recruitment", "completed", "2026-09-06T09:45:00Z"),
                 RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-growth-002", "marketing", "completed", "2026-09-06T13:20:00Z"),
                 RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-scale-003", "finance", "completed", "2026-09-06T08:10:00Z"),
                 RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-scale-003", "supplier", "completed", "2026-09-06T14:00:00Z"),
                 RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-scale-003", "tender", "awaiting_review", "2026-09-06T15:30:00Z"),
-                RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-enterprise-001", "recruitment", "completed", "2026-09-06T16:00:00Z")
+                RawSelectionReq(java.util.UUID.randomUUID().toString(), "tenant-corp-001", "recruitment", "completed", "2026-09-06T16:00:00Z")
             )
             allRequests.addAll(initialReqs)
         }

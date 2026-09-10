@@ -15,7 +15,7 @@ import java.util.concurrent.ConcurrentHashMap
 data class PaymentRecord(
     val id: String = UUID.randomUUID().toString(),
     val orderId: String,
-    val tenantId: String = "tenant-enterprise-001",
+    val tenantId: String,
     val gatewayReferenceId: String,
     val amount: Double,
     val status: String = "pending",
@@ -40,7 +40,7 @@ class PaymentRepository(
             PaymentRecord(
                 id = "pay-01",
                 orderId = "ord-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = "tenant-sample-001",
                 gatewayReferenceId = "midtrans-ref-001",
                 amount = 5000000.0,
                 status = "settlement",
@@ -50,7 +50,7 @@ class PaymentRepository(
             PaymentRecord(
                 id = "pay-02",
                 orderId = "ord-02",
-                tenantId = "tenant-enterprise-001",
+                tenantId = "tenant-sample-001",
                 gatewayReferenceId = "xendit-ref-002",
                 amount = 2500000.0,
                 status = "settlement",
@@ -80,7 +80,7 @@ class PaymentRepository(
             PaymentRecord(
                 id = "pay-stuck-01",
                 orderId = "ord-stuck-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = "tenant-sample-001",
                 gatewayReferenceId = "midtrans-stuck-91",
                 amount = 1250000.0,
                 status = "pending",

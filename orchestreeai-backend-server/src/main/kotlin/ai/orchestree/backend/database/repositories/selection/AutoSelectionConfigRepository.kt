@@ -140,10 +140,6 @@ class AutoSelectionConfigRepository(
                 found = true
             }
         }
-        if (!found) {
-            supabase.deleteRecord("selection_auto_configs", "tenant-enterprise-001", "id=eq.$configId")
-            found = true
-        }
         found
     }
 }

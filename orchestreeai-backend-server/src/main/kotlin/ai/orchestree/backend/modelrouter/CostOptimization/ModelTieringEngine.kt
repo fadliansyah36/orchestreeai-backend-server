@@ -79,7 +79,10 @@ class ModelTieringEngine(
         if (specialized != null) {
             val code = specialized.providerCode.lowercase()
             val candidateModel = modelRepo.getActiveModelsForTier(code, complexityTier)
-                .firstOrNull()?.modelIdentifier ?: specialized.defaultModel
+                .firstOrNull()?.modelIdentifier
+                ?: specialized.defaultModel.ifBlank { null }
+                ?: modelRepo.getActiveModelsForProvider(code).firstOrNull()?.modelIdentifier
+                ?: ""
             return code to candidateModel
         }
 
@@ -87,7 +90,11 @@ class ModelTieringEngine(
         val topProvider = providers.firstOrNull()
         val topCode = topProvider?.providerCode?.lowercase() ?: "nvidia_nim"
         val topModel = modelRepo.getActiveModelsForTier(topCode, complexityTier)
-            .firstOrNull()?.modelIdentifier ?: topProvider?.defaultModel ?: "meta/llama-3.3-70b-instruct"
+            .firstOrNull()?.modelIdentifier
+            ?: topProvider?.defaultModel?.ifBlank { null }
+            ?: modelRepo.getActiveModelsForProvider(topCode).firstOrNull()?.modelIdentifier
+            ?: modelRepo.getAllActive().firstOrNull()?.modelIdentifier
+            ?: ""
         return topCode to topModel
     }
 }

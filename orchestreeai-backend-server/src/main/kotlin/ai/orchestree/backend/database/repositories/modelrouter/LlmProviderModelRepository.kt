@@ -50,57 +50,9 @@ open class LlmProviderModelRepository(
     private val modelCache = ConcurrentHashMap<String, LlmProviderModelEntity>()
 
     init {
-        // Initial baseline models for dynamic tiering when offline or pre-sync
-        registerModel(LlmProviderModelEntity(
-            id = "nim-default-70b",
-            providerId = "llm-nvidia-nim",
-            providerCode = "NVIDIA_NIM",
-            modelIdentifier = "meta/llama-3.3-70b-instruct",
-            complexityTier = "frontier",
-            contextWindow = 131072,
-            supportsToolCalling = true,
-            isActive = true
-        ))
-        registerModel(LlmProviderModelEntity(
-            id = "nim-default-8b",
-            providerId = "llm-nvidia-nim",
-            providerCode = "NVIDIA_NIM",
-            modelIdentifier = "meta/llama-3.1-8b-instruct",
-            complexityTier = "moderate",
-            contextWindow = 131072,
-            supportsToolCalling = true,
-            isActive = true
-        ))
-        registerModel(LlmProviderModelEntity(
-            id = "nim-default-3b",
-            providerId = "llm-nvidia-nim",
-            providerCode = "NVIDIA_NIM",
-            modelIdentifier = "meta/llama-3.2-3b-instruct",
-            complexityTier = "simple",
-            contextWindow = 131072,
-            supportsToolCalling = true,
-            isActive = true
-        ))
-        registerModel(LlmProviderModelEntity(
-            id = "openrouter-default-r1",
-            providerId = "llm-openrouter",
-            providerCode = "OPENROUTER",
-            modelIdentifier = "deepseek/deepseek-r1",
-            complexityTier = "frontier",
-            contextWindow = 131072,
-            supportsToolCalling = true,
-            isActive = true
-        ))
-        registerModel(LlmProviderModelEntity(
-            id = "groq-default-instant",
-            providerId = "llm-groq",
-            providerCode = "GROQ",
-            modelIdentifier = "llama-3.1-8b-instant",
-            complexityTier = "simple",
-            contextWindow = 131072,
-            supportsToolCalling = true,
-            isActive = true
-        ))
+        // Dynamic Model Discovery: models are fetched dynamically via syncNvidiaNimModelCatalog()
+        // or synced from PostgreSQL database table llm_provider_models.
+        // No hardcoded model strings are stored in code.
     }
 
     fun registerModel(model: LlmProviderModelEntity) {

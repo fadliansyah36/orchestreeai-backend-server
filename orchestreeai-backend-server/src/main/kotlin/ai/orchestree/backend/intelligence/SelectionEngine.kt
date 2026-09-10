@@ -118,7 +118,7 @@ class SelectionEngine(
      * 6. Update selection_source_documents.detected_schema & selection_requests.domain_category
      * 7. Catat konsumsi kredit ke Central Credit Ledger (Fase 113)
      */
-    suspend fun understandDataset(documentId: String): DataUnderstandingResult {
+    suspend fun understandDataset(documentId: String, tenantId: String = ""): DataUnderstandingResult {
         val extracted = selectionSourceDocumentRepo.getExtractedRows(documentId)
 
         // SCHEMA & FIELD DETECTION - via LLM (Model Router, taskCategory=COMPLEX_ANALYSIS), BUKAN aturan statis per tipe data
@@ -140,18 +140,21 @@ class SelectionEngine(
         // COMPLETENESS/QUALITY SCORE
         val qualityScore = dataQualityAnalyzer.calculateCompletenessScore(normalized, schemaDetection.fields)
 
-        selectionSourceDocumentRepo.updateSchema(documentId, schemaDetection.toJson())
-
         try {
             val doc = selectionSourceDocumentRepo.get(documentId)
             val reqId = doc.selection_request_id
+            val resolvedTenantId = tenantId.ifBlank {
+                if (reqId.isNotBlank()) selectionRepo.getSelectionRequestById(reqId, "")?.tenant_id ?: "" else ""
+            }
+
+            selectionSourceDocumentRepo.updateSchema(documentId, schemaDetection.toJson(), resolvedTenantId)
+
             if (reqId.isNotBlank()) {
-                val tenantId = "tenant-enterprise-001"
                 val assignedJob = SelectionAiJobTitleRegistry.mapDomainToAiJobTitle(domainClassification)
                 selectionRepo.updateSelectionRequestStatus(
                     requestId = reqId,
                     status = "processing",
-                    tenantId = tenantId,
+                    tenantId = resolvedTenantId,
                     domainCategory = domainClassification,
                     assignedJobTitleId = assignedJob.id
                 )
@@ -169,15 +172,16 @@ class SelectionEngine(
                             put("invalid_rows_found", invalidRows.size)
                         }
                     ),
-                    tenantId
+                    resolvedTenantId
                 )
                 recordSelectionCreditConsumption(
-                    tenantId = tenantId,
+                    tenantId = resolvedTenantId,
                     selectionRequestId = reqId,
                     rowCount = extracted.size
                 )
             }
         } catch (e: Exception) {
+            // Non-blocking for offline analysis
             logger.warn("Could not link data understanding to selection request: ${e.message}")
         }
 
@@ -217,8 +221,8 @@ class SelectionEngine(
 
         // Ambil selection request terkait untuk melanjutkan evaluasi AI
         val reqId = doc.selection_request_id
-        val selectionReq = selectionRepo.getSelectionRequestById(reqId, "tenant-enterprise-001")
-        val tenantId = selectionReq?.tenant_id ?: "tenant-enterprise-001"
+        val selectionReq = selectionRepo.getSelectionRequestById(reqId, "")
+        val tenantId = selectionReq?.tenant_id ?: ""
         val promptText = selectionReq?.prompt_text ?: "Pilih kandidat atau data terbaik berdasarkan kriteria umum"
 
         // Eksekusi Model Router untuk evaluasi kriteria, scoring, ranking & insights

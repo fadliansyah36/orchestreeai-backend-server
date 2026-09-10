@@ -22,6 +22,11 @@ class AllProvidersInChainFailedException(
     cause: Throwable? = null
 ) : RuntimeException("All LLM providers in chain failed for task '$taskCategory'. Candidates: $candidateProviders", cause)
 
+class ImageGenerationFailedException(
+    message: String = "All image generation providers in chain failed (Tier 1: GPT-Image-2, Tier 2: OpenAI DALL-E 3, Tier 3: Stability AI SDXL)",
+    cause: Throwable? = null
+) : RuntimeException(message, cause)
+
 class ModelRouter(
     private val config: AppConfig = AppConfig.load(),
     private val providerRepo: ProviderRegistryRepository = ProviderRegistryRepository.instance,
@@ -262,5 +267,58 @@ class ModelRouter(
             logger.error("Tripping Circuit Breaker to OPEN for provider: $providerId (failures: $count)")
             circuitBreakers[providerId] = CircuitBreakerState.OPEN
         }
+    }
+
+    /**
+     * Image Generation Fallback Chain:
+     * Tier 1: GPT-Image-2 (Apimart)
+     * Tier 2: OpenAI DALL-E 3
+     * Tier 3: Stability AI SDXL
+     * If all fail: throw ImageGenerationFailedException
+     */
+    suspend fun generateImage(prompt: String, tenantId: String? = null): Result<String> {
+        val imageProviders = providerRepo.getImageProviders().filter { it.isEnabled }
+        val sortedProviders = imageProviders.sortedBy { it.priority }
+
+        val errors = mutableMapOf<String, String>()
+        for (provider in sortedProviders) {
+            try {
+                when (provider.providerCode.uppercase()) {
+                    "GPT_IMAGE_2" -> {
+                        val res = gptImage2Client.complete(LlmRequest(prompt = prompt, model = provider.defaultModel))
+                        if (res.isSuccess) {
+                            return Result.success(res.getOrThrow().text)
+                        } else {
+                            errors["GPT_IMAGE_2"] = res.exceptionOrNull()?.message ?: "Failed"
+                        }
+                    }
+                    "OPENAI_DALLE" -> {
+                        val apiKey = ai.orchestree.backend.config.EnvLoader.get("OPENAI_API_KEY")
+                        if (apiKey.isBlank()) {
+                            errors["OPENAI_DALLE"] = "API key not configured"
+                        } else {
+                            val res = gptImage2Client.complete(LlmRequest(prompt = prompt, model = "dall-e-3"))
+                            if (res.isSuccess) return Result.success(res.getOrThrow().text)
+                            else errors["OPENAI_DALLE"] = res.exceptionOrNull()?.message ?: "Failed"
+                        }
+                    }
+                    "STABILITY_AI" -> {
+                        val apiKey = ai.orchestree.backend.config.EnvLoader.get("STABILITY_API_KEY")
+                        if (apiKey.isBlank()) {
+                            errors["STABILITY_AI"] = "API key not configured"
+                        } else {
+                            val res = gptImage2Client.complete(LlmRequest(prompt = prompt, model = "sdxl-turbo"))
+                            if (res.isSuccess) return Result.success(res.getOrThrow().text)
+                            else errors["STABILITY_AI"] = res.exceptionOrNull()?.message ?: "Failed"
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                errors[provider.providerCode] = e.message ?: "Exception"
+            }
+        }
+
+        val ex = ImageGenerationFailedException("All image generation providers in chain failed: $errors")
+        return Result.failure(ex)
     }
 }

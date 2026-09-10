@@ -15,6 +15,7 @@ import ai.orchestree.backend.scheduler.jobs.MemoryDecayJob
 import ai.orchestree.backend.scheduler.jobs.PaymentReconciliationJob
 import ai.orchestree.backend.scheduler.jobs.ProactiveDailyReportJob
 import ai.orchestree.backend.scheduler.jobs.ScheduledSelectionAnalysisJob
+import ai.orchestree.backend.scheduler.jobs.SyncNvidiaNimCatalogJob
 import ai.orchestree.backend.scheduler.jobs.TrialExpiryJob
 import ai.orchestree.backend.scheduler.jobs.CreditExpirationJob
 import kotlinx.coroutines.CoroutineScope
@@ -51,6 +52,7 @@ class SchedulerEngine(
     val scheduledSelectionJob: ScheduledSelectionAnalysisJob = ScheduledSelectionAnalysisJob(),
     val deadLetterQueueRepo: DeadLetterQueueRepository = DeadLetterQueueRepository(),
     val creditExpirationJob: CreditExpirationJob = CreditExpirationJob(),
+    val syncNvidiaNimCatalogJob: SyncNvidiaNimCatalogJob = SyncNvidiaNimCatalogJob(),
     val schedulerJobQueueRepo: SchedulerJobQueueRepository = SchedulerJobQueueRepository(),
     private val tenantRepo: ai.orchestree.backend.database.repositories.identity.TenantRepository = ai.orchestree.backend.database.repositories.identity.TenantRepository.instance
 ) {
@@ -203,6 +205,17 @@ class SchedulerEngine(
                 executeWithDlq(jobType = "CREDIT_EXPIRATION", tenantId = null, payload = emptyMap()) {
                     val count = creditExpirationJob.execute()
                     "Expired subscription balances for $count tenant(s)"
+                }
+                delay(60_000 * 60 * 24) // 24 hours
+            }
+        }
+
+        // 7. Dynamic Catalog Sync Loop (NVIDIA NIM, runs daily to sync model catalog)
+        activeJobs["NVIDIA_NIM_CATALOG_SYNC"] = scope.launch {
+            while (isActive) {
+                executeWithDlq(jobType = "NVIDIA_NIM_CATALOG_SYNC", tenantId = null, payload = emptyMap()) {
+                    val count = syncNvidiaNimCatalogJob.execute()
+                    "Synced $count models from NVIDIA NIM catalog"
                 }
                 delay(60_000 * 60 * 24) // 24 hours
             }

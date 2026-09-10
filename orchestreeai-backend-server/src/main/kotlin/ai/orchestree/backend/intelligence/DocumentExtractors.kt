@@ -420,7 +420,7 @@ class VisionModel(
      * REUSE Model Router modality image understanding (Fase 82).
      * Melakukan OCR dan ekstraksi data tabular dari file scan/gambar.
      */
-    suspend fun extractTextAndTablesFromScannedImage(rawContent: ByteArray): ExtractedDataset = withContext(Dispatchers.IO) {
+    suspend fun extractTextAndTablesFromScannedImage(rawContent: ByteArray, tenantId: String = ""): ExtractedDataset = withContext(Dispatchers.IO) {
         val base64Data = Base64.getEncoder().encodeToString(rawContent)
         val prompt = """
             Anda adalah Vision Intelligence OCR & Table Extraction Engine.
@@ -441,7 +441,7 @@ class VisionModel(
         val req = ModelRouteRequest(
             taskCategory = "STRUCTURED_REASONING",
             prompt = prompt,
-            tenantId = "tenant-enterprise-001"
+            tenantId = tenantId
         )
 
         try {
@@ -562,7 +562,7 @@ class SelectionSourceDocumentRepository(
     suspend fun updateSchema(
         documentId: String,
         schemaJson: JsonElement,
-        tenantId: String = "tenant-enterprise-001"
+        tenantId: String
     ) {
         val doc = selectionRepo.getSourceDocument(documentId)
         val rowCount = extractedRowsStorage[documentId]?.size ?: doc?.extracted_row_count ?: 0
@@ -580,7 +580,7 @@ class SelectionSourceDocumentRepository(
         extractedRowCount: Int,
         extractionStatus: String,
         detectedSchema: JsonElement? = null,
-        tenantId: String = "tenant-enterprise-001"
+        tenantId: String
     ) {
         selectionRepo.updateExtraction(
             docId = documentId,

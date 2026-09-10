@@ -116,9 +116,20 @@ suspend fun ApplicationCall.enforceEntitlementGate(
 ): Boolean {
     val principal = this.principal<JWTPrincipal>()
     val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
+        ?: this.parameters["tenantId"]
         ?: this.request.headers["X-Tenant-Id"]
         ?: this.request.queryParameters["tenant_id"]
-        ?: "tenant-enterprise-001"
+
+    if (tenantId.isNullOrBlank()) {
+        this.respond(
+            HttpStatusCode.BadRequest,
+            mapOf(
+                "error" to "TenantResolutionFailed",
+                "message" to "Tenant ID is required and could not be resolved from authentication context, path parameters, or X-Tenant-ID header"
+            )
+        )
+        return false
+    }
 
     val isAllowed = entitlementEngine.enforceEntitlement(tenantId, featureKey)
     if (!isAllowed) {

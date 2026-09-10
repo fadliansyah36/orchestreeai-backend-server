@@ -41,6 +41,23 @@ class NvidiaNimDynamicCatalogAndTenantResolutionTest {
     @Test
     fun testDynamicModelTieringEngineSelection() {
         val modelRepo = LlmProviderModelRepository()
+        // Register dynamically discovered models into catalog for tiering verification
+        val sampleDiscovered = listOf("meta/llama-3.3-70b-instruct", "meta/llama-3.1-8b-instruct", "meta/llama-3.2-3b-instruct")
+        for (m in sampleDiscovered) {
+            val tier = modelRepo.classifyComplexityTier(m)
+            modelRepo.registerModel(
+                ai.orchestree.backend.database.repositories.modelrouter.LlmProviderModelEntity(
+                    id = "nim-dynamic-${m.hashCode()}",
+                    providerId = "llm-nvidia-nim",
+                    providerCode = "NVIDIA_NIM",
+                    modelIdentifier = m,
+                    complexityTier = tier,
+                    contextWindow = 131072,
+                    supportsToolCalling = true,
+                    isActive = true
+                )
+            )
+        }
         val tieringEngine = ModelTieringEngine(modelRepo = modelRepo)
 
         // Frontier complexity

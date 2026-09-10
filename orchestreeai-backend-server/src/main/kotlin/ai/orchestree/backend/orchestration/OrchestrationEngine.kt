@@ -579,9 +579,11 @@ class OrchestrationEngine(
         agentId: String,
         workflowExecutionId: String,
         activityDescription: String,
-        targetInfo: String?
+        targetInfo: String?,
+        tenantId: String = ""
     ): Task {
         val existingTask = taskRepo.findByWorkflowExecution(workflowExecutionId)
+        val resolvedTenant = if (tenantId.isNotBlank()) tenantId else (workflowExecutionRepo.getById(workflowExecutionId)?.tenantId ?: "")
         return if (existingTask == null) {
             val deptId = agentRepo.get(agentId)?.departmentId ?: "dept-ai-ops"
             val task = taskRepo.create(
@@ -592,13 +594,14 @@ class OrchestrationEngine(
                 aiActivityStatusLine = activityDescription,
                 thirdPartyMonitoringTarget = targetInfo,
                 departmentId = deptId,
-                workflowExecutionId = workflowExecutionId
+                workflowExecutionId = workflowExecutionId,
+                tenantId = resolvedTenant
             )
-            taskActivityLogRepo.record(task.id, agentId, "ai_agent", "created", activityDescription)
+            taskActivityLogRepo.record(task.id, agentId, "ai_agent", "created", activityDescription, tenantId = resolvedTenant)
             task
         } else {
             val updated = taskRepo.updateActivityStatusLine(existingTask.id, activityDescription) ?: existingTask
-            taskActivityLogRepo.record(existingTask.id, agentId, "ai_agent", "status_line_updated", activityDescription)
+            taskActivityLogRepo.record(existingTask.id, agentId, "ai_agent", "status_line_updated", activityDescription, tenantId = resolvedTenant)
             updated
         }
     }
@@ -618,7 +621,7 @@ class OrchestrationEngine(
         checklists: List<String>,
         workflowExecutionId: String? = null,
         column: TaskColumn = TaskColumn.IN_PROGRESS,
-        tenantId: String = "tenant-enterprise-001"
+        tenantId: String = ""
     ): Task {
         val existing = taskRepo.findActiveByMonitoringTarget(agentId, monitoringTarget)
         val task = if (existing != null) {

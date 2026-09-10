@@ -225,7 +225,7 @@ class SelectionRepository(
         if (cached != null) return@withContext cached
 
         try {
-            val tId = tenantId ?: "tenant-enterprise-001"
+            val tId = tenantId ?: ""
             val queryRes = supabase.queryTable("selection_source_documents", tId, "id=eq.$docId")
             if (queryRes.isSuccess) {
                 val array = json.parseToJsonElement(queryRes.getOrThrow()).jsonArray
@@ -286,7 +286,7 @@ class SelectionRepository(
         extractedRowCount: Int,
         status: String,
         detectedSchema: JsonElement? = null,
-        tenantId: String = "tenant-enterprise-001"
+        tenantId: String
     ): Result<Unit> = updateSourceDocumentStatus(docId, status, extractedRowCount, detectedSchema, tenantId)
 
     suspend fun insertCriteria(criteria: List<SelectionCriterionRecord>, tenantId: String): Result<Unit> = withContext(Dispatchers.IO) {

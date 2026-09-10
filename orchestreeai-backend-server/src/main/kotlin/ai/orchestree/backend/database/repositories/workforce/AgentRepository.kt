@@ -23,7 +23,7 @@ class AgentRepository(
     init {
         agentsStore["agent-radar-competitor"] = AgentModel(
             id = "agent-radar-competitor",
-            tenantId = "tenant-enterprise-001",
+            tenantId = "tenant-sample-001",
             name = "Radar Intelijen Kompetitor",
             role = "Market Intelligence Specialist",
             personaCode = "RADAR",
@@ -31,7 +31,7 @@ class AgentRepository(
         )
         agentsStore["agent-chief-of-staff"] = AgentModel(
             id = "agent-chief-of-staff",
-            tenantId = "tenant-enterprise-001",
+            tenantId = "tenant-sample-001",
             name = "Chief of Staff AI",
             role = "Executive Operations Coordinator",
             personaCode = "COS",
@@ -39,7 +39,7 @@ class AgentRepository(
         )
         agentsStore["agent-orchestrator"] = AgentModel(
             id = "agent-orchestrator",
-            tenantId = "tenant-enterprise-001",
+            tenantId = "tenant-sample-001",
             name = "Autonomous Orchestrator",
             role = "Core Workflow Engine",
             personaCode = "ORCH",
@@ -54,7 +54,7 @@ class AgentRepository(
     suspend fun get(agentId: String): AgentModel? {
         return agentsStore[agentId] ?: AgentModel(
             id = agentId,
-            tenantId = "tenant-enterprise-001",
+            tenantId = "tenant-sample-001",
             name = "AI Agent $agentId",
             role = "Autonomous Worker",
             personaCode = "AGENT",

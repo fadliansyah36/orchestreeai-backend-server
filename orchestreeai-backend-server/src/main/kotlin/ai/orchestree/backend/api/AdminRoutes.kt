@@ -318,7 +318,7 @@ data class AdminDlqReprocessErrorResponse(
 
 @Serializable
 data class AdminRecordTransactionRequest(
-    val tenantId: String = "tenant-enterprise-001",
+    val tenantId: String,
     val customerId: String = "cust-new-001",
     val amount: Double,
     val orderNumber: String? = null
@@ -448,7 +448,7 @@ fun Route.adminRoutes(
             call.respond(
                 HttpStatusCode.OK,
                 listOf(
-                    AdminTenantItem(id = "tenant-enterprise-001", name = "PT Nusantara Energy", tier = "ENTERPRISE", status = "ACTIVE", usersCount = 48, activeAgents = 12),
+                    AdminTenantItem(id = "tenant-corp-001", name = "PT Nusantara Energy", tier = "ENTERPRISE", status = "ACTIVE", usersCount = 48, activeAgents = 12),
                     AdminTenantItem(id = "tenant-growth-002", name = "CV Retail Sukses", tier = "GROWTH", status = "ACTIVE", usersCount = 15, activeAgents = 4),
                     AdminTenantItem(id = "tenant-starter-003", name = "Kopi Kenangan Senja", tier = "STARTER", status = "ACTIVE", usersCount = 5, activeAgents = 2)
                 )
@@ -1029,7 +1029,7 @@ fun Route.adminRoutes(
                     totalTokens = 4528900,
                     totalCostUsd = 12.84,
                     breakdown = listOf(
-                        AdminTenantUsageBreakdown(tenant = "tenant-enterprise-001", tokens = 3120000, costUsd = 9.20),
+                        AdminTenantUsageBreakdown(tenant = "tenant-corp-001", tokens = 3120000, costUsd = 9.20),
                         AdminTenantUsageBreakdown(tenant = "tenant-growth-002", tokens = 1408900, costUsd = 3.64)
                     )
                 )
@@ -1544,9 +1544,13 @@ fun Route.adminRoutes(
                 val amount = 1500000.0
                 val fifteenMinAgo = System.currentTimeMillis() - (15 * 60 * 1000L)
 
+                val simTenantId = call.request.queryParameters["tenantId"]
+                    ?: call.request.headers["X-Tenant-ID"]
+                    ?: "tenant-sim-$randomSuffix"
+
                 scheduler.paymentReconciliationJob.orderRepo.create(
                     orderId = testOrderId,
-                    tenantId = "tenant-enterprise-001",
+                    tenantId = simTenantId,
                     amount = amount,
                     status = "pending_payment"
                 )
@@ -1555,7 +1559,7 @@ fun Route.adminRoutes(
                     ai.orchestree.backend.database.repositories.payments.PaymentRecord(
                         id = testPayId,
                         orderId = testOrderId,
-                        tenantId = "tenant-enterprise-001",
+                        tenantId = simTenantId,
                         gatewayReferenceId = testRef,
                         amount = amount,
                         status = "pending",
