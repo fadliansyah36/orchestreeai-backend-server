@@ -19,6 +19,7 @@ import ai.orchestree.backend.models.TenantSelectionUsageItem
 import ai.orchestree.backend.models.DomainCategoryUsageItem
 import ai.orchestree.backend.database.repositories.taskboard.TaskRepository
 import ai.orchestree.backend.database.repositories.selection.SelectionRepository
+import ai.orchestree.backend.database.repositories.identity.TenantRepository
 import ai.orchestree.backend.billing.CentralCreditLedgerService
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -167,66 +168,67 @@ class AnalyticsRepository(
     private fun seedInitialRealData() {
         val now = System.currentTimeMillis()
         val startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val seedEnterpriseTenant = TenantRepository.SEED_ENTERPRISE_TENANT_ID
 
         // 1. Tenants
-        tenants["tenant-enterprise-001"] = TenantRecord("tenant-enterprise-001", "Nusantara Logistics Enterprise", "ACTIVE")
+        tenants[seedEnterpriseTenant] = TenantRecord(seedEnterpriseTenant, "Nusantara Logistics Enterprise", "ACTIVE") // allowed: in-memory analytics store seed
         tenants["tenant-growth-002"] = TenantRecord("tenant-growth-002", "Batik Craft Studio", "ACTIVE")
         tenants["tenant-scale-003"] = TenantRecord("tenant-scale-003", "Kopi Nusantara Co", "ACTIVE")
         tenants["tenant-starter-004"] = TenantRecord("tenant-starter-004", "Garuda FinTech Global", "ACTIVE")
 
         // 2. Active Subscriptions
-        subscriptions.add(SubscriptionRecord("sub-01", "tenant-enterprise-001", "ACTIVE", 4999000.0, startOfMonth))
+        subscriptions.add(SubscriptionRecord("sub-01", seedEnterpriseTenant, "ACTIVE", 4999000.0, startOfMonth)) // allowed: in-memory analytics store seed
         subscriptions.add(SubscriptionRecord("sub-02", "tenant-growth-002", "ACTIVE", 1499000.0, startOfMonth))
         subscriptions.add(SubscriptionRecord("sub-03", "tenant-scale-003", "ACTIVE", 2499000.0, startOfMonth))
         subscriptions.add(SubscriptionRecord("sub-04", "tenant-starter-004", "EXPIRED", 499000.0, startOfMonth - 40 * 86400000L))
 
         // 3. AI Credit Wallets
-        creditWallets["tenant-enterprise-001"] = AiCreditWalletRecord("tenant-enterprise-001", 12500.0)
+        creditWallets[seedEnterpriseTenant] = AiCreditWalletRecord(seedEnterpriseTenant, 12500.0) // allowed: in-memory analytics store seed
         creditWallets["tenant-growth-002"] = AiCreditWalletRecord("tenant-growth-002", 4200.0)
         creditWallets["tenant-scale-003"] = AiCreditWalletRecord("tenant-scale-003", 8500.0)
         creditWallets["tenant-starter-004"] = AiCreditWalletRecord("tenant-starter-004", 500.0)
 
         // 4. AI Credit Ledgers
-        usageLedgers.add(AiCreditLedgerRecord("cld-01", "tenant-enterprise-001", "wa-acc-01", 350.0, now - 3600000L))
-        usageLedgers.add(AiCreditLedgerRecord("cld-02", "tenant-enterprise-001", "tg-acc-01", 120.5, now - 7200000L))
+        usageLedgers.add(AiCreditLedgerRecord("cld-01", seedEnterpriseTenant, "wa-acc-01", 350.0, now - 3600000L)) // allowed: in-memory analytics store seed
+        usageLedgers.add(AiCreditLedgerRecord("cld-02", seedEnterpriseTenant, "tg-acc-01", 120.5, now - 7200000L)) // allowed: in-memory analytics store seed
         usageLedgers.add(AiCreditLedgerRecord("cld-03", "tenant-growth-002", "wa-acc-02", 85.0, now - 86400000L))
         usageLedgers.add(AiCreditLedgerRecord("cld-04", "tenant-scale-003", "ig-acc-01", 210.0, now - 172800000L))
 
         // 5. Users (Staff Human vs AI)
         val sampleStaff = listOf(
-            UserRecord("usr-01", "tenant-enterprise-001", "Ahmad Fauzi", "DEPT_MANAGER", true),
-            UserRecord("usr-02", "tenant-enterprise-001", "Siti Rahma", "STAFF_HUMAN", true),
-            UserRecord("usr-03", "tenant-enterprise-001", "Doni Prasetyo", "STAFF_HUMAN", true),
+            UserRecord("usr-01", seedEnterpriseTenant, "Ahmad Fauzi", "DEPT_MANAGER", true), // allowed: in-memory analytics store seed
+            UserRecord("usr-02", seedEnterpriseTenant, "Siti Rahma", "STAFF_HUMAN", true), // allowed: in-memory analytics store seed
+            UserRecord("usr-03", seedEnterpriseTenant, "Doni Prasetyo", "STAFF_HUMAN", true), // allowed: in-memory analytics store seed
             UserRecord("usr-04", "tenant-growth-002", "Rina Wulandari", "TENANT_OWNER", true),
             UserRecord("usr-05", "tenant-growth-002", "Budi Utomo", "STAFF_HUMAN", true),
             UserRecord("usr-06", "tenant-scale-003", "Eko Saputra", "STAFF_HUMAN", true),
             UserRecord("usr-07", "tenant-scale-003", "Nurul Hidayah", "STAFF_HUMAN", true),
             UserRecord("usr-08", "tenant-starter-004", "Hendro Wijaya", "STAFF_HUMAN", true),
-            UserRecord("usr-09", "tenant-enterprise-001", "Maya Indah", "STAFF_HUMAN", true),
+            UserRecord("usr-09", seedEnterpriseTenant, "Maya Indah", "STAFF_HUMAN", true), // allowed: in-memory analytics store seed
             UserRecord("usr-10", "tenant-growth-002", "Arif Kurniawan", "STAFF_HUMAN", true),
-            UserRecord("usr-ai-01", "tenant-enterprise-001", "Agent Sales Bot", "AI_AGENT", true),
+            UserRecord("usr-ai-01", seedEnterpriseTenant, "Agent Sales Bot", "AI_AGENT", true), // allowed: in-memory analytics store seed
             UserRecord("usr-ai-02", "tenant-growth-002", "Agent CS Bot", "AI_AGENT", true)
         )
         users.addAll(sampleStaff)
 
         // 6. AI Agents (with health status check)
-        aiAgents["agent-01"] = AiAgentRecord("agent-01", "tenant-enterprise-001", "Budi Closer AI", "Senior Closer Specialist", "ONLINE", true)
-        aiAgents["agent-02"] = AiAgentRecord("agent-02", "tenant-enterprise-001", "Sari Support AI", "Tier 1 CS Specialist", "ACTIVE", true)
+        aiAgents["agent-01"] = AiAgentRecord("agent-01", seedEnterpriseTenant, "Budi Closer AI", "Senior Closer Specialist", "ONLINE", true) // allowed: in-memory analytics store seed
+        aiAgents["agent-02"] = AiAgentRecord("agent-02", seedEnterpriseTenant, "Sari Support AI", "Tier 1 CS Specialist", "ACTIVE", true) // allowed: in-memory analytics store seed
         aiAgents["agent-03"] = AiAgentRecord("agent-03", "tenant-growth-002", "Dewi Marketing AI", "Campaign Content Specialist", "ONLINE", true)
         aiAgents["agent-04"] = AiAgentRecord("agent-04", "tenant-scale-003", "Rian LeadGen AI", "Omnichannel Prospector", "BUSY", true)
-        aiAgents["agent-05"] = AiAgentRecord("agent-05", "tenant-enterprise-001", "Tono Logistics AI", "Courier Tracking Bot", "OFFLINE", false)
+        aiAgents["agent-05"] = AiAgentRecord("agent-05", seedEnterpriseTenant, "Tono Logistics AI", "Courier Tracking Bot", "OFFLINE", false) // allowed: in-memory analytics store seed
 
         // 7. Customers
-        customers["cust-01"] = CustomerRecord("cust-01", "tenant-enterprise-001", "PT Surya Makmur", 3) // repeat order (>1)
-        customers["cust-02"] = CustomerRecord("cust-02", "tenant-enterprise-001", "Budi Santoso", 2)   // repeat order (>1)
+        customers["cust-01"] = CustomerRecord("cust-01", seedEnterpriseTenant, "PT Surya Makmur", 3) // allowed: in-memory analytics store seed
+        customers["cust-02"] = CustomerRecord("cust-02", seedEnterpriseTenant, "Budi Santoso", 2) // allowed: in-memory analytics store seed
         customers["cust-03"] = CustomerRecord("cust-03", "tenant-growth-002", "Dewi Lestari", 1)       // single order
         customers["cust-04"] = CustomerRecord("cust-04", "tenant-scale-003", "CV Jaya Abadi", 4)       // repeat order (>1)
         customers["cust-05"] = CustomerRecord("cust-05", "tenant-starter-004", "Andi Pratama", 1)     // single order
 
         // 8. Orders (status: PAID vs PENDING)
-        orders.add(OrderRecord("ord-01", "tenant-enterprise-001", "cust-01", "ORD-2026-001", 5000000.0, "PAID", now - 86400000L))
-        orders.add(OrderRecord("ord-02", "tenant-enterprise-001", "cust-01", "ORD-2026-002", 2500000.0, "PAID", now - 43200000L))
-        orders.add(OrderRecord("ord-03", "tenant-enterprise-001", "cust-02", "ORD-2026-003", 1250000.0, "PAID", now - 21600000L))
+        orders.add(OrderRecord("ord-01", seedEnterpriseTenant, "cust-01", "ORD-2026-001", 5000000.0, "PAID", now - 86400000L)) // allowed: in-memory analytics store seed
+        orders.add(OrderRecord("ord-02", seedEnterpriseTenant, "cust-01", "ORD-2026-002", 2500000.0, "PAID", now - 43200000L)) // allowed: in-memory analytics store seed
+        orders.add(OrderRecord("ord-03", seedEnterpriseTenant, "cust-02", "ORD-2026-003", 1250000.0, "PAID", now - 21600000L)) // allowed: in-memory analytics store seed
         orders.add(OrderRecord("ord-04", "tenant-growth-002", "cust-03", "ORD-2026-004", 750000.0, "PAID", now - 10800000L))
         orders.add(OrderRecord("ord-05", "tenant-scale-003", "cust-04", "ORD-2026-005", 3500000.0, "PAID", now - 5400000L))
         orders.add(OrderRecord("ord-06", "tenant-starter-004", "cust-05", "ORD-2026-006", 500000.0, "PENDING_PAYMENT", now - 1800000L))
@@ -247,7 +249,7 @@ class AnalyticsRepository(
                 llmUsageLogs.add(
                     LlmUsageLogRecord(
                         id = "llm-log-$i-$p",
-                        tenantId = if (i % 2 == 0) "tenant-enterprise-001" else "tenant-growth-002",
+                        tenantId = if (i % 2 == 0) seedEnterpriseTenant else "tenant-growth-002", // allowed: in-memory analytics store seed
                         provider = p,
                         modelName = "$p-v1",
                         inputTokens = inputTok,
@@ -264,7 +266,7 @@ class AnalyticsRepository(
         performanceMetrics.add(
             PerformanceMetricRecord(
                 id = "pm-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = seedEnterpriseTenant, // allowed: in-memory analytics store seed
                 entityId = "usr-01",
                 entityType = "HUMAN",
                 completionRate = 94.0,
@@ -278,7 +280,7 @@ class AnalyticsRepository(
         performanceMetrics.add(
             PerformanceMetricRecord(
                 id = "pm-02",
-                tenantId = "tenant-enterprise-001",
+                tenantId = seedEnterpriseTenant, // allowed: in-memory analytics store seed
                 entityId = "usr-02",
                 entityType = "HUMAN",
                 completionRate = 88.0,
@@ -292,7 +294,7 @@ class AnalyticsRepository(
         performanceMetrics.add(
             PerformanceMetricRecord(
                 id = "pm-03",
-                tenantId = "tenant-enterprise-001",
+                tenantId = seedEnterpriseTenant, // allowed: in-memory analytics store seed
                 entityId = "agent-01",
                 entityType = "AI_AGENT",
                 completionRate = 98.5,

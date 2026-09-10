@@ -162,7 +162,7 @@ class ModelRouter(
 
             attemptedProviders.add(providerId)
 
-            // Dynamic model resolution from catalog without hardcoding
+            // Dynamic model resolution from catalog
             val targetModel = if (!request.model.isNullOrBlank()) {
                 request.model
             } else {

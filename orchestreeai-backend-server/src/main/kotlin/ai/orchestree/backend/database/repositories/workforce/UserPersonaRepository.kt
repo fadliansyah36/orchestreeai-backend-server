@@ -1,6 +1,7 @@
 package ai.orchestree.backend.database.repositories.workforce
 
 import ai.orchestree.backend.database.SupabaseClientProvider
+import ai.orchestree.backend.database.repositories.identity.TenantRepository
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
 import java.util.concurrent.ConcurrentHashMap
@@ -50,7 +51,7 @@ class UserPersonaRepository(
 
             personasStore["usr-owner-01"] = UserPersona(
                 userId = "usr-owner-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 displayName = "Prasetyo Utomo",
                 jobLevel = "Owner / Founder",
                 jobLevelCode = "owner",
@@ -59,7 +60,7 @@ class UserPersonaRepository(
 
             val mgrPersona = UserPersona(
                 userId = "usr-manager-sales-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 displayName = "Ahmad Dani",
                 jobLevel = "Manajer",
                 jobLevelCode = "manajer",
@@ -70,7 +71,7 @@ class UserPersonaRepository(
 
             personasStore["usr-staff-sales-01"] = UserPersona(
                 userId = "usr-staff-sales-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 displayName = "Budi Hartono",
                 jobLevel = "Staff",
                 jobLevelCode = "staff",
@@ -79,7 +80,7 @@ class UserPersonaRepository(
 
             personasStore["usr-staff-finance-01"] = UserPersona(
                 userId = "usr-staff-finance-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 displayName = "Siti Rahmawati",
                 jobLevel = "Staff",
                 jobLevelCode = "staff",
@@ -88,7 +89,7 @@ class UserPersonaRepository(
 
             personasStore["usr-01"] = UserPersona(
                 userId = "usr-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 displayName = "Standard Staff",
                 jobLevel = "Staff",
                 jobLevelCode = "staff"

@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "db:push": "supabase db push"
+  },
   "dependencies": {
     "pg": "^8.23.0"
   }

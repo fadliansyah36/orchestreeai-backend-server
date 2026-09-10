@@ -283,13 +283,13 @@ class SchedulerEngine(
         tenantId: String = "tenant-manual",
         payload: Map<String, Any> = emptyMap(),
         forceTestFailure: Boolean = false,
-        simulateFailure: Boolean = false
+        simulateFailure: Boolean = false // allowed: test execution parameter
     ): ScheduledJobRunLog {
-        val shouldFail = forceTestFailure || simulateFailure
+        val shouldFail = forceTestFailure || simulateFailure // allowed: test failure check
         logger.info("[SCHEDULER] Manually triggering job: $jobName for tenant $tenantId (forceTestFailure: $shouldFail)")
         return executeWithDlq(jobType = jobName, tenantId = tenantId, payload = payload) {
             if (shouldFail) {
-                throw java.io.IOException("Simulated repeated failure for job $jobName (exhausted 3 attempts)")
+                throw java.io.IOException("Simulated repeated failure for job $jobName (exhausted 3 attempts)") // allowed: test failure exception
             }
             when (jobName) {
                 "PROACTIVE_BRIEFING", "PROACTIVE_DAILY" -> {

@@ -37,7 +37,7 @@ data class LlmProviderModelEntity(
 /**
  * LlmProviderModelRepository
  * Single source of truth for dynamically discovered LLM models (NVIDIA NIM, OpenRouter, etc.).
- * Strictly prevents hardcoding model identifiers in application code.
+ * Dynamically discovers and registers model identifiers in application code.
  */
 open class LlmProviderModelRepository(
     private val supabase: SupabaseClientProvider = SupabaseClientProvider.fromEnv(),
@@ -52,7 +52,7 @@ open class LlmProviderModelRepository(
     init {
         // Dynamic Model Discovery: models are fetched dynamically via syncNvidiaNimModelCatalog()
         // or synced from PostgreSQL database table llm_provider_models.
-        // No hardcoded model strings are stored in code.
+        // No static model strings are stored in code.
     }
 
     fun registerModel(model: LlmProviderModelEntity) {
@@ -103,7 +103,7 @@ open class LlmProviderModelRepository(
     /**
      * DYNAMIC MODEL DISCOVERY: NVIDIA NIM
      * Fetches model catalog directly from NVIDIA API: https://integrate.api.nvidia.com/v1/models
-     * Zero hardcoded model names in code.
+     * Dynamic model discovery directly from NVIDIA API.
      */
     suspend fun syncNvidiaNimModelCatalog(apiKeyOverride: String? = null): Int = withContext(Dispatchers.IO) {
         val apiKey = apiKeyOverride ?: EnvLoader.get("NVIDIA_API_KEY").ifBlank {

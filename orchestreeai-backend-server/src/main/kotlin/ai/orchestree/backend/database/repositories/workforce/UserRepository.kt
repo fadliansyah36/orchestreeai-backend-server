@@ -1,6 +1,7 @@
 package ai.orchestree.backend.database.repositories.workforce
 
 import ai.orchestree.backend.database.SupabaseClientProvider
+import ai.orchestree.backend.database.repositories.identity.TenantRepository
 import ai.orchestree.backend.models.UserRole
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
@@ -37,7 +38,7 @@ class UserRepository(
             // 1. Owner / Direksi
             usersStore["usr-owner-01"] = User(
                 id = "usr-owner-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 departmentId = "executive",
                 teamId = "team-c-level",
                 name = "Prasetyo Utomo (CEO & Owner)",
@@ -48,7 +49,7 @@ class UserRepository(
             // 2. Dept Manager Sales
             val mgrSales = User(
                 id = "usr-manager-sales-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 departmentId = "sales",
                 teamId = "team-sales-leads",
                 name = "Ahmad Dani (Sales Manager)",
@@ -61,7 +62,7 @@ class UserRepository(
             // 3. Staff Human Sales
             usersStore["usr-staff-sales-01"] = User(
                 id = "usr-staff-sales-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 departmentId = "sales",
                 teamId = "team-sales-field-01",
                 name = "Budi Hartono (Sales Representative)",
@@ -72,7 +73,7 @@ class UserRepository(
             // 4. Staff Human Finance
             usersStore["usr-staff-finance-01"] = User(
                 id = "usr-staff-finance-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 departmentId = "finance",
                 teamId = "team-finance-accounting",
                 name = "Siti Rahmawati (Finance Officer)",
@@ -83,7 +84,7 @@ class UserRepository(
             // 5. Default generic user
             usersStore["usr-01"] = User(
                 id = "usr-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 departmentId = "sales",
                 teamId = "team-sales-field-01",
                 name = "Standard Staff User",

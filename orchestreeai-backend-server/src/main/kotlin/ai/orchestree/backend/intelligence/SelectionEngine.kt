@@ -213,16 +213,16 @@ class SelectionEngine(
             else -> throw UnsupportedFileTypeException(doc.file_type)
         }
         val rowCount = extracted.rows.size
+        val reqId = doc.selection_request_id
+        val selectionReq = selectionRepo.getSelectionRequestById(reqId, "")
+        val tenantId = selectionReq?.tenant_id ?: ""
         selectionSourceDocumentRepo.putExtractedRows(documentId, extracted.rows)
-        selectionSourceDocumentRepo.updateExtraction(documentId, rowCount, "ready")
+        selectionSourceDocumentRepo.updateExtraction(documentId, rowCount, "ready", tenantId = tenantId)
 
         // Eksekusi Data Understanding (Bagian C)
         val understanding = understandDataset(documentId)
 
         // Ambil selection request terkait untuk melanjutkan evaluasi AI
-        val reqId = doc.selection_request_id
-        val selectionReq = selectionRepo.getSelectionRequestById(reqId, "")
-        val tenantId = selectionReq?.tenant_id ?: ""
         val promptText = selectionReq?.prompt_text ?: "Pilih kandidat atau data terbaik berdasarkan kriteria umum"
 
         // Eksekusi Model Router untuk evaluasi kriteria, scoring, ranking & insights

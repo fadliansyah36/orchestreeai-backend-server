@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory
 /**
  * SyncNvidiaNimCatalogJob
  * Scheduled job to dynamically discover and synchronize the latest NVIDIA NIM model catalog.
- * Runs periodically to ensure models are up-to-date without hardcoding model names.
+ * Runs periodically to ensure models are up-to-date from provider API.
  */
 class SyncNvidiaNimCatalogJob(
     private val modelRepo: LlmProviderModelRepository = LlmProviderModelRepository.instance

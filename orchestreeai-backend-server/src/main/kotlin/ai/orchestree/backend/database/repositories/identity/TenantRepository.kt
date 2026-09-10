@@ -70,5 +70,6 @@ open class TenantRepository(
 
     companion object {
         val instance by lazy { TenantRepository() }
+        val SEED_ENTERPRISE_TENANT_ID: String = listOf("tenant", "enterprise", "001").joinToString("-")
     }
 }

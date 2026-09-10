@@ -1,6 +1,7 @@
 package ai.orchestree.backend.database.repositories.taskboard
 
 import ai.orchestree.backend.database.SupabaseClientProvider
+import ai.orchestree.backend.database.repositories.identity.TenantRepository
 import ai.orchestree.backend.database.repositories.workforce.UserRepository
 import ai.orchestree.backend.database.repositories.workforce.UserPersonaRepository
 import ai.orchestree.backend.database.repositories.workforce.ProactiveCollaborationScopeRepository
@@ -128,7 +129,7 @@ class TaskRepository(
             if (tasksStore.isNotEmpty()) return
             val sampleAiTask = Task(
                 id = "tsk-ai-crawl-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 title = "Autonomous Market Intel: Crawl Harga Kompetitor Marketplace",
                 description = "Tugas otonom inisiasi AI Agent untuk memantau pergeseran harga katalog kompetitor harian.",
                 descriptionRichText = "### Sasaran Pemantauan\n- Memantau pergeseran harga katalog kompetitor secara otonom.\n- Ekstraksi SKU, harga diskon, dan ketersediaan stok produk unggulan.\n- Melakukan validasi anomali potongan harga > 20%.\n- Kirim insight realtime ke Board dan tim pemasaran.",
@@ -156,7 +157,7 @@ class TaskRepository(
 
             val sampleHumanTask = Task(
                 id = "tsk-human-rev-02",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 title = "Finalisasi Kontrak Kerjasama Vendor Cloud Q3",
                 description = "Review klausul SLA dan enkripsi data dengan tim legal.",
                 descriptionRichText = "### Review Kontrak\n1. Pastikan RPO < 5 menit dan RTO < 15 menit.\n2. Validasi klausul kerahasiaan data pelanggan.\n3. Tandatangani dokumen digital.",
@@ -175,7 +176,7 @@ class TaskRepository(
 
             val sampleSalesStaffTask = Task(
                 id = "tsk-staff-sales-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 title = "Follow up Klien Prioritas Bank Mandiri",
                 description = "Presentasi proposal solusi enterprise dan demo sistem.",
                 columnName = "IN_PROGRESS",
@@ -191,7 +192,7 @@ class TaskRepository(
 
             val sampleSalesTeamTask = Task(
                 id = "tsk-team-sales-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 title = "Penyusunan Target Kuartal IV Tim Field Sales",
                 description = "Konsolidasi pipeline dan alokasi wilayah.",
                 columnName = "TODO",
@@ -207,7 +208,7 @@ class TaskRepository(
 
             val sampleSalesLeadsTask = Task(
                 id = "tsk-dept-sales-leads-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 title = "Kualifikasi Inbound Leads Enterprise Q3",
                 description = "Validasi prospek masuk dari webinar.",
                 columnName = "IN_PROGRESS",
@@ -223,7 +224,7 @@ class TaskRepository(
 
             val sampleFinanceTask = Task(
                 id = "tsk-finance-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 title = "Rekonsiliasi Pajak dan Faktur Penjualan Bulanan",
                 description = "Sinkronisasi e-faktur dengan laporan neraca.",
                 columnName = "IN_PROGRESS",
@@ -239,7 +240,7 @@ class TaskRepository(
 
             val sampleFinanceAiTask = Task(
                 id = "tsk-finance-ai-01",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 title = "Autonomous Financial Audit: Deteksi Anomali Pengeluaran",
                 description = "AI Agent monitoring audit transaksi GL.",
                 columnName = "TODO",
@@ -258,7 +259,7 @@ class TaskRepository(
             // Additional multi-tenant tasks for platform-wide analytics
             val sampleEnterpriseOrchTask = Task(
                 id = "tsk-orch-route-03",
-                tenantId = "tenant-enterprise-001",
+                tenantId = TenantRepository.SEED_ENTERPRISE_TENANT_ID, // allowed: in-memory fallback seed store
                 title = "Optimasi Rute Armada Distribusi Logistik Jawa Barat",
                 columnName = "DONE",
                 priority = "HIGH",

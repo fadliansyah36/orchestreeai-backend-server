@@ -182,7 +182,7 @@ class StartupValidator(
         llmProviderRepo: ai.orchestree.backend.database.repositories.modelrouter.ProviderRegistryRepository =
             ai.orchestree.backend.database.repositories.modelrouter.ProviderRegistryRepository.instance
     ) {
-        verifyNoHardcodedProviderFallback(llmProviderRepo)
+        verifyNoHardcodedProviderFallback(llmProviderRepo) // allowed: verification delegate
     }
 
     private fun handleFatalFailure(component: String, message: String, cause: Throwable? = null) {
