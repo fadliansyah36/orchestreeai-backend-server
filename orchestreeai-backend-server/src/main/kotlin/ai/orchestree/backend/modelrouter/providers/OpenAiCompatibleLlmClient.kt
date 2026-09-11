@@ -43,7 +43,16 @@ class OpenAiCompatibleLlmClient(
                 return@withContext Result.failure(IllegalStateException("API Key is missing for provider: $providerName"))
             }
 
-            val targetModel = request.model ?: defaultModel
+            val targetModel = (request.model?.takeIf { it.isNotBlank() }
+                ?: defaultModel.takeIf { it.isNotBlank() }
+                ?: resolveFallbackModel(providerId)).trim()
+
+            if (targetModel.isBlank()) {
+                val errorMsg = "Provider $providerName ($providerId) cannot execute completion: missing required 'model' parameter. Neither request.model, defaultModel, nor provider fallback model is configured."
+                logger.error(errorMsg)
+                return@withContext Result.failure(IllegalArgumentException(errorMsg))
+            }
+
             val endpoint = if (baseUrl.endsWith("/chat/completions")) baseUrl else "${baseUrl.trimEnd('/')}/chat/completions"
 
             val messages = buildJsonArray {
@@ -118,6 +127,20 @@ class OpenAiCompatibleLlmClient(
             p == "groq" -> (promptTokens * 0.00000005) + (completionTokens * 0.00000008)
             p == "openrouter" -> (promptTokens * 0.0000005) + (completionTokens * 0.0000015)
             else -> 0.0
+        }
+    }
+
+    companion object {
+        fun resolveFallbackModel(providerId: String): String {
+            val p = providerId.lowercase().trim()
+            return when {
+                p.contains("nvidia") -> ai.orchestree.backend.config.EnvLoader.get("NVIDIA_MODEL_NAME", "meta/llama-3.1-70b-instruct")
+                p.contains("openrouter") -> ai.orchestree.backend.config.EnvLoader.get("OPENROUTER_MODEL_NAME", "meta-llama/llama-3.1-70b-instruct")
+                p.contains("groq") -> ai.orchestree.backend.config.EnvLoader.get("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
+                p.contains("deepseek") -> ai.orchestree.backend.config.EnvLoader.get("DEEPSEEK_MODEL_NAME", "deepseek-chat")
+                p.contains("anthropic") -> ai.orchestree.backend.config.EnvLoader.get("ANTHROPIC_MODEL_NAME", "claude-3-5-sonnet-20241022")
+                else -> ""
+            }
         }
     }
 }

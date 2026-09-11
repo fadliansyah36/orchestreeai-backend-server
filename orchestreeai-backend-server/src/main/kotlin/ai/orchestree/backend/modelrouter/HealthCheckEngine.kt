@@ -1,5 +1,6 @@
 package ai.orchestree.backend.modelrouter
 
+import ai.orchestree.backend.database.repositories.modelrouter.ProviderRegistryRepository
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
 
@@ -16,6 +17,26 @@ class HealthCheckEngine(
     private val modelRouter: ModelRouter = ModelRouter()
 ) {
     private val logger = LoggerFactory.getLogger(HealthCheckEngine::class.java)
+
+    /**
+     * Validates that all active LLM providers in ProviderRegistryRepository have a valid model name configured.
+     * Logs a clear error for any registered provider missing a model name.
+     */
+    fun validateRegisteredProviderModels(): Boolean {
+        val providers = ProviderRegistryRepository.instance.getAll()
+        var allValid = true
+        for (provider in providers) {
+            if (provider.isEnabled) {
+                if (provider.defaultModel.isBlank()) {
+                    logger.error("[LLM ROUTER CONFIG ERROR] Registered provider '${provider.name}' (${provider.providerCode}) has no defaultModel configured! This will cause HTTP 400 (missing_required_field 'model') on OpenAI-compatible gateways.")
+                    allValid = false
+                } else {
+                    logger.info("[LLM ROUTER] Provider '${provider.name}' (${provider.providerCode}) configured with defaultModel='${provider.defaultModel}'")
+                }
+            }
+        }
+        return allValid
+    }
 
     suspend fun checkAll(): List<ProviderHealth> {
         val results = mutableListOf<ProviderHealth>()

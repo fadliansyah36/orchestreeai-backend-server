@@ -1,0 +1,6 @@
+{
+  "name": "Orchestree AI",
+  "description": "Enterprise Multi-Agent Swarm Orchestration Platform with autonomous digital workforce, dynamic task boards, omnichannel sales routing, human-in-the-loop approvals, and model router governance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

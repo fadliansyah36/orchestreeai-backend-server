@@ -32,7 +32,7 @@ data class PaymentReconciliationQueueItem(
 
 class PaymentReconciliationQueueRepository(
     private val supabase: SupabaseClientProvider = SupabaseClientProvider.fromEnv(),
-    private val databaseUrl: String = AppConfig.load().supabase.databaseUrl
+    private val customDatabaseUrl: String? = null
 ) {
     private val logger = LoggerFactory.getLogger(PaymentReconciliationQueueRepository::class.java)
     private val memoryQueue = ConcurrentHashMap<String, PaymentReconciliationQueueItem>()
@@ -73,16 +73,86 @@ class PaymentReconciliationQueueRepository(
         memoryQueue[item2.id] = item2
     }
 
-    private fun getDbConnection(): Connection? {
+    private fun extractHostPort(rawUrl: String): String {
         return try {
-            if (databaseUrl.isNotBlank() && databaseUrl.startsWith("postgres")) {
-                val jdbcUrl = if (databaseUrl.startsWith("postgresql://")) {
-                    "jdbc:" + databaseUrl
-                } else {
-                    databaseUrl
+            val clean = rawUrl.removePrefix("jdbc:")
+            val uri = java.net.URI(clean)
+            val host = uri.host ?: "unknown-host"
+            val port = if (uri.port != -1) uri.port else 5432
+            "$host:$port"
+        } catch (_: Exception) {
+            "unknown-target"
+        }
+    }
+
+    private fun tryConnectToUrl(rawUrl: String, maxRetries: Int = 3): Connection? {
+        val clean = rawUrl.removePrefix("jdbc:")
+        val targetHostPort = extractHostPort(rawUrl)
+        var lastException: Throwable? = null
+
+        for (attempt in 1..maxRetries) {
+            try {
+                if (clean.startsWith("postgres") || clean.startsWith("postgresql")) {
+                    val uri = java.net.URI(clean)
+                    val host = uri.host ?: return null
+                    val port = if (uri.port != -1) uri.port else 5432
+                    val path = uri.path?.trimStart('/') ?: ""
+                    val userInfo = uri.userInfo ?: ""
+                    val user = if (userInfo.contains(":")) userInfo.substringBefore(":") else userInfo
+                    val pass = if (userInfo.contains(":")) userInfo.substringAfter(":") else ""
+
+                    val jdbcUrl = "jdbc:postgresql://$host:$port/$path"
+                    val props = java.util.Properties().apply {
+                        if (user.isNotBlank()) setProperty("user", user)
+                        if (pass.isNotBlank()) setProperty("password", pass)
+                        setProperty("ssl", "true")
+                        setProperty("sslmode", "require")
+                        setProperty("connectTimeout", "5")
+                    }
+                    Class.forName("org.postgresql.Driver")
+                    return DriverManager.getConnection(jdbcUrl, props)
                 }
-                DriverManager.getConnection(jdbcUrl)
-            } else null
+            } catch (e: Throwable) {
+                lastException = e
+                if (attempt < maxRetries) {
+                    try {
+                        Thread.sleep(100L * (1 shl (attempt - 1)))
+                    } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        break
+                    }
+                }
+            }
+        }
+
+        logger.warn("Database connection to target $targetHostPort failed after $maxRetries retries (possible firewall/VPC connector blocking direct connection or pooler error): ${lastException?.message}")
+        return null
+    }
+
+    private fun getDbConnection(): Connection? {
+        val candidates = mutableListOf<String>()
+        customDatabaseUrl?.takeIf { it.isNotBlank() }?.let { candidates.add(it) }
+
+        val poolUrl = ai.orchestree.backend.config.EnvLoader.get("DATABASE_POOL_URL").trim()
+        if (poolUrl.isNotBlank()) candidates.add(poolUrl)
+
+        val directUrl = ai.orchestree.backend.config.EnvLoader.get("DATABASE_DIRECT_URL").trim()
+        if (directUrl.isNotBlank()) candidates.add(directUrl)
+
+        val dbUrl = ai.orchestree.backend.config.EnvLoader.get("DATABASE_URL").trim()
+        if (dbUrl.isNotBlank()) candidates.add(dbUrl)
+
+        val cfg = AppConfig.load()
+        if (cfg.supabase.databaseDirectUrl.isNotBlank()) candidates.add(cfg.supabase.databaseDirectUrl)
+        if (cfg.supabase.databaseUrl.isNotBlank()) candidates.add(cfg.supabase.databaseUrl)
+
+        for (candidate in candidates.distinct()) {
+            val conn = tryConnectToUrl(candidate)
+            if (conn != null) return conn
+        }
+
+        return try {
+            ai.orchestree.backend.billing.DatabaseManager.getConnection()
         } catch (e: Throwable) {
             logger.debug("Database direct connection not available: ${e.message}")
             null

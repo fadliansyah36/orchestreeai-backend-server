@@ -169,12 +169,27 @@ class AppAttestationService(
 
     /**
      * Checks whether an endpoint is considered sensitive and strictly requires Play Integrity.
+     * Normalizes paths so that routes registered with or without '/api/v1' are properly matched.
      */
     fun isSensitiveEndpoint(path: String): Boolean {
-        return path == "/api/v1/auth/login" ||
-               path.startsWith("/api/v1/billing/adjust") ||
-               path.startsWith("/api/v1/payments/fulfill") ||
-               path.startsWith("/api/v1/billing/commercial/reserve")
+        val cleanPath = path.trimEnd('/')
+        val normalized = if (cleanPath.startsWith("/api/v1")) {
+            cleanPath.removePrefix("/api/v1")
+        } else {
+            cleanPath
+        }
+
+        return normalized == "/auth/login" ||
+               normalized.startsWith("/billing/adjust") ||
+               normalized.startsWith("/billing/checkout") ||
+               normalized.startsWith("/billing/topup") ||
+               normalized.startsWith("/billing/commercial/reserve") ||
+               normalized.startsWith("/billing/invoice") ||
+               normalized.startsWith("/payments/fulfill") ||
+               normalized.startsWith("/payments/webhook") ||
+               normalized.startsWith("/webhooks/payment") ||
+               normalized.startsWith("/admin/credit/adjust") ||
+               normalized.startsWith("/admin/payments/reconciliation")
     }
 }
 

@@ -53,7 +53,7 @@ class ModelRouter(
                 System.getenv("NVIDIA_API_KEY") ?: ""
             }
         },
-        defaultModel = "" // dynamically resolved from catalog
+        defaultModel = ai.orchestree.backend.config.EnvLoader.get("NVIDIA_MODEL_NAME", "meta/llama-3.1-70b-instruct")
     )
 
     val groqClient = OpenAiCompatibleLlmClient(
@@ -61,7 +61,7 @@ class ModelRouter(
         providerName = "Groq Cloud",
         baseUrl = ai.orchestree.backend.config.EnvLoader.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
         apiKeyProvider = { ai.orchestree.backend.config.EnvLoader.get("GROQ_API_KEY") },
-        defaultModel = ""
+        defaultModel = ai.orchestree.backend.config.EnvLoader.get("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
     )
 
     val openRouterClient = OpenAiCompatibleLlmClient(
@@ -69,7 +69,7 @@ class ModelRouter(
         providerName = "OpenRouter",
         baseUrl = ai.orchestree.backend.config.EnvLoader.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
         apiKeyProvider = { ai.orchestree.backend.config.EnvLoader.get("OPENROUTER_API_KEY") },
-        defaultModel = ""
+        defaultModel = ai.orchestree.backend.config.EnvLoader.get("OPENROUTER_MODEL_NAME", "meta-llama/llama-3.1-70b-instruct")
     )
 
     val geminiClient = GeminiLlmClient(
@@ -276,7 +276,7 @@ class ModelRouter(
      * Tier 3: Stability AI SDXL
      * If all fail: throw ImageGenerationFailedException
      */
-    suspend fun generateImage(prompt: String, tenantId: String? = null): Result<String> {
+    suspend fun generateImage(prompt: String, tenantId: String?): Result<String> {
         val imageProviders = providerRepo.getImageProviders().filter { it.isEnabled }
         val sortedProviders = imageProviders.sortedBy { it.priority }
 
@@ -321,4 +321,6 @@ class ModelRouter(
         val ex = ImageGenerationFailedException("All image generation providers in chain failed: $errors")
         return Result.failure(ex)
     }
+
+    suspend fun generateImage(prompt: String): Result<String> = generateImage(prompt, null)
 }

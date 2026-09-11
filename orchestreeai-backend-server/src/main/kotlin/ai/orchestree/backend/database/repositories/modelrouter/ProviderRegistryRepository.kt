@@ -75,6 +75,7 @@ open class ProviderRegistryRepository(
                 priority = 1,
                 fallbackPriority = 1,
                 taskSpecialization = "frontier_reasoning,complex_analysis,code_generation,fast_inference",
+                defaultModel = EnvLoader.get("NVIDIA_MODEL_NAME", "meta/llama-3.1-70b-instruct"),
                 isEnabled = true,
                 latencyMs = 95,
                 healthStatus = "healthy"
@@ -88,6 +89,7 @@ open class ProviderRegistryRepository(
                 priority = 2,
                 fallbackPriority = 2,
                 taskSpecialization = "cross_provider,fallback,general_reasoning",
+                defaultModel = EnvLoader.get("OPENROUTER_MODEL_NAME", "meta-llama/llama-3.1-70b-instruct"),
                 isEnabled = true,
                 latencyMs = 180,
                 healthStatus = "healthy"
@@ -101,6 +103,7 @@ open class ProviderRegistryRepository(
                 priority = 3,
                 fallbackPriority = 3,
                 taskSpecialization = "low_latency,fast_classification,triage,sdr",
+                defaultModel = EnvLoader.get("GROQ_MODEL_NAME", "llama-3.3-70b-versatile"),
                 isEnabled = true,
                 latencyMs = 85,
                 healthStatus = "healthy"
@@ -114,6 +117,7 @@ open class ProviderRegistryRepository(
                 priority = 99,
                 fallbackPriority = 99,
                 taskSpecialization = "legacy",
+                defaultModel = EnvLoader.get("DEEPSEEK_MODEL_NAME", "deepseek-chat"),
                 isEnabled = false,
                 latencyMs = 160,
                 healthStatus = "disabled"
@@ -127,6 +131,7 @@ open class ProviderRegistryRepository(
                 priority = 99,
                 fallbackPriority = 99,
                 taskSpecialization = "legacy",
+                defaultModel = EnvLoader.get("ANTHROPIC_MODEL_NAME", "claude-3-5-sonnet-20241022"),
                 isEnabled = false,
                 latencyMs = 240,
                 healthStatus = "disabled"
@@ -195,19 +200,29 @@ open class ProviderRegistryRepository(
                     // 1. Sync llm_providers
                     val stmt = conn.createStatement()
                     val rs = stmt.executeQuery(
-                        "SELECT id, name, provider_code, api_base_url, api_key_env, priority, fallback_priority, task_specialization, is_enabled, latency_ms, error_rate_pct, health_status FROM llm_providers WHERE is_enabled = true ORDER BY fallback_priority ASC"
+                        "SELECT * FROM llm_providers WHERE is_enabled = true ORDER BY fallback_priority ASC"
                     )
+                    val metaLlm = rs.metaData
+                    val colsLlm = (1..metaLlm.columnCount).map { metaLlm.getColumnName(it).lowercase() }.toSet()
                     var foundLlm = false
                     while (rs.next()) {
+                        val pCode = rs.getString("provider_code")
+                        val modelName = if (colsLlm.contains("default_model")) {
+                            rs.getString("default_model")?.takeIf { it.isNotBlank() } ?: getDefaultModelForProvider(pCode)
+                        } else {
+                            getDefaultModelForProvider(pCode)
+                        }
+
                         val entity = LlmProviderEntity(
                             id = rs.getString("id"),
                             name = rs.getString("name"),
-                            providerCode = rs.getString("provider_code"),
+                            providerCode = pCode,
                             apiBaseUrl = rs.getString("api_base_url"),
                             apiKeyEnv = rs.getString("api_key_env"),
                             priority = rs.getInt("priority"),
                             fallbackPriority = rs.getInt("fallback_priority"),
                             taskSpecialization = rs.getString("task_specialization") ?: "",
+                            defaultModel = modelName,
                             isEnabled = rs.getBoolean("is_enabled"),
                             latencyMs = rs.getLong("latency_ms"),
                             errorRatePct = rs.getDouble("error_rate_pct"),
@@ -306,5 +321,17 @@ open class ProviderRegistryRepository(
 
     companion object {
         val instance by lazy { ProviderRegistryRepository() }
+
+        fun getDefaultModelForProvider(providerCode: String): String {
+            return when (providerCode.uppercase().trim()) {
+                "NVIDIA_NIM", "NVIDIA" -> EnvLoader.get("NVIDIA_MODEL_NAME", "meta/llama-3.1-70b-instruct")
+                "OPENROUTER" -> EnvLoader.get("OPENROUTER_MODEL_NAME", "meta-llama/llama-3.1-70b-instruct")
+                "GROQ" -> EnvLoader.get("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
+                "DEEPSEEK" -> EnvLoader.get("DEEPSEEK_MODEL_NAME", "deepseek-chat")
+                "ANTHROPIC" -> EnvLoader.get("ANTHROPIC_MODEL_NAME", "claude-3-5-sonnet-20241022")
+                "GEMINI", "GOOGLE_GEMINI" -> EnvLoader.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
+                else -> ""
+            }
+        }
     }
 }

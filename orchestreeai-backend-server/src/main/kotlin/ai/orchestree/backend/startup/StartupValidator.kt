@@ -38,10 +38,15 @@ class StartupValidator(
         // 3. Verifikasi Koneksi Redis
         verifyRedisConnection(config)
 
-        // 4. Verifikasi Minimal 1 LLM Provider Aktif & Sehat
+        // 4. Verifikasi Minimal 1 LLM Provider Aktif & Sehat & Model Name
+        val healthEngine = HealthCheckEngine()
+        healthEngine.validateRegisteredProviderModels()
         verifyMinimumOneLlmProviderHealthy()
 
-        // 5. Verifikasi Ketiadaan Static/Hardcoded Provider Fallback (Fail-Closed) // allowed: startup policy verification
+        // 5. Verifikasi Kredensial Groq Cloud (Probe K8s Secret / API Key)
+        verifyGroqCredentials()
+
+        // 6. Verifikasi Ketiadaan Static/Hardcoded Provider Fallback (Fail-Closed) // allowed: startup policy verification
         verifyNoStaticProviderFallback()
 
         logger.info("[STARTUP OK] SELURUH komponen dan dependency kritis terverifikasi sehat. Melanjutkan booting Ktor Server.")
@@ -139,6 +144,38 @@ class StartupValidator(
             handleFatalFailure("LlmProviderHealth", errMsg)
         } else {
             logger.info("[STARTUP] LLM Provider health check terverifikasi ($healthyCount provider aktif, API keys terkonfigurasi).")
+        }
+    }
+
+    suspend fun verifyGroqCredentials() = withContext(Dispatchers.IO) {
+        val groqApiKey = ai.orchestree.backend.config.EnvLoader.get("GROQ_API_KEY").trim()
+        if (groqApiKey.isBlank()) {
+            logger.info("[STARTUP] GROQ_API_KEY tidak dikonfigurasi, melewati verifikasi probe kredensial Groq.")
+            return@withContext
+        }
+
+        val groqBaseUrl = ai.orchestree.backend.config.EnvLoader.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1").trimEnd('/')
+        val modelsEndpoint = if (groqBaseUrl.endsWith("/models")) groqBaseUrl else "$groqBaseUrl/models"
+
+        try {
+            val response = httpClient.get(modelsEndpoint) {
+                header("Authorization", "Bearer $groqApiKey")
+            }
+
+            if (response.status == io.ktor.http.HttpStatusCode.Unauthorized || response.status.value == 401) {
+                val specificMsg = "Groq Cloud: Invalid API Key (HTTP 401). GROQ_API_KEY in pod/Kubernetes secret is invalid, revoked, or expired!"
+                logger.error("[STARTUP ERROR] $specificMsg")
+                val env = ai.orchestree.backend.config.EnvLoader.get("APPLICATION_ENV", "development")
+                if (env.equals("production", ignoreCase = true)) {
+                    handleFatalFailure("GroqCredentials", specificMsg)
+                }
+            } else if (response.status.isSuccess()) {
+                logger.info("[STARTUP] Groq Cloud API credentials terverifikasi valid (HTTP 200 OK).")
+            } else {
+                logger.warn("[STARTUP] Groq Cloud probe mengembalikan status HTTP ${response.status.value}")
+            }
+        } catch (e: Exception) {
+            logger.warn("[STARTUP] Pengecekan probe Groq Cloud mengalami kendala jaringan: ${e.message}")
         }
     }
 

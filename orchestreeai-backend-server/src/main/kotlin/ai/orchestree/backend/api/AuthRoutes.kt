@@ -5,6 +5,8 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
+import io.ktor.server.plugins.origin
+import io.ktor.server.request.header
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.Route
@@ -12,6 +14,7 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.get
 import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
+import org.slf4j.LoggerFactory
 import java.util.Date
 
 @Serializable
@@ -62,6 +65,7 @@ data class UserProfileDto(
 )
 
 fun Route.authRoutes() {
+    val logger = LoggerFactory.getLogger("ai.orchestree.backend.api.AuthRoutes")
     val config = AppConfig.load()
     val jwtSecret = config.security.jwtSecretKey.ifBlank { "101ffa9b-10c9-4e15-9390-90c2d32ed6c8" }
     val algorithm = Algorithm.HMAC256(jwtSecret)
@@ -69,10 +73,20 @@ fun Route.authRoutes() {
     route("/auth") {
         post("/login") {
             val req = call.receive<LoginApiRequest>()
-            val resolvedTenantId = req.tenantId
-                ?: call.request.headers["X-Tenant-ID"]
-                ?: call.request.headers["X-Tenant-Id"]
+            val resolvedTenantId = req.tenantId?.trim()?.takeIf { it.isNotBlank() }
+                ?: call.request.headers["X-Tenant-ID"]?.trim()?.takeIf { it.isNotBlank() }
+                ?: call.request.headers["X-Tenant-Id"]?.trim()?.takeIf { it.isNotBlank() }
             if (resolvedTenantId.isNullOrBlank()) {
+                val clientIp = call.request.header("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()
+                    ?: runCatching { call.request.origin.remoteHost }.getOrNull()
+                    ?: "unknown-ip"
+                val userAgent = call.request.header("User-Agent") ?: "unknown-agent"
+                logger.warn(
+                    "[AUTH FAILED] POST /auth/login tenantId validation failed. clientIp={}, userAgent={}, email={}, reason='Tenant ID is missing in request body and headers'",
+                    clientIp,
+                    userAgent,
+                    req.email
+                )
                 call.respond(
                     HttpStatusCode.BadRequest,
                     mapOf("error" to "Tenant ID is required and could not be resolved from request body or X-Tenant-ID header")
