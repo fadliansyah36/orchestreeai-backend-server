@@ -146,7 +146,7 @@ class AppAttestationService(
         }
 
         // 2. Native client identity verification (Android client headers)
-        if (clientPlatform == "Android-Native" || origin == "android-app://ai.orchestree.mobile" || requestedWith == "com.example" || csrfHeader == "1") {
+        if (clientPlatform == "Android-Native" || origin == "android-app://ai.orchestree.app" || requestedWith == "ai.orchestree.app" || csrfHeader == "1") {
             return true
         }
 
