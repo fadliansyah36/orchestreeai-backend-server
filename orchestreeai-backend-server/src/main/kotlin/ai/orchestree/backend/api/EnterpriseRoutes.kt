@@ -146,6 +146,7 @@ data class DataQualityIssueItem(
 fun Route.enterpriseRoutes() {
     val supabase = SupabaseClientProvider.fromEnv()
     val modelRouter = ModelRouter()
+    val orchestrationEngine = ai.orchestree.backend.orchestration.OrchestrationEngine(modelRouter = modelRouter)
     val correlator = CrossSystemCorrelator()
     val chiefOfStaffService = ai.orchestree.backend.intelligence.ChiefOfStaffService(supabase, modelRouter)
 
@@ -237,7 +238,23 @@ fun Route.enterpriseRoutes() {
             val tenantId = call.parameters["id"] ?: "tenant-default"
             val req = call.receive<ManagementQueryRequest>()
 
-            val prompt = "Management Query: ${req.question}\nEntity Focus: ${req.entityFocus ?: "General"}\nBerikan jawaban eksekutif yang didukung data riil."
+            // 1. Evaluate Cross-System signals using CrossSystemCorrelator
+            val entity = req.entityFocus ?: "General"
+            val correlation = correlator.correlateSignals(tenantId, entity)
+            val correlationContext = if (correlation.isCorrelated) {
+                "\n[Cross-System Correlation Detected]: ${correlation.summaryInsight} (Systems: ${correlation.distinctSystems.joinToString(", ")})"
+            } else ""
+
+            val prompt = "Management Query: ${req.question}\nEntity Focus: $entity$correlationContext\nBerikan jawaban eksekutif yang didukung data riil."
+
+            // 2. POLA A: Dispatch via OrchestrationEngine (wf-enterprise-cross-system-correlation)
+            orchestrationEngine.runWorkflow(
+                tenantId = tenantId,
+                workflowDefId = "wf-enterprise-cross-system-correlation",
+                prompt = prompt,
+                contextParams = mapOf("entityFocus" to entity, "question" to req.question)
+            )
+
             val llmResult = modelRouter.execute(
                 ModelRouteRequest(
                     taskCategory = "REASONING",
@@ -257,9 +274,32 @@ fun Route.enterpriseRoutes() {
                 ManagementQueryResponse(
                     question = req.question,
                     answer = answer,
-                    confidence = 94.0,
-                    dataAvailability = "AVAILABLE",
-                    sourcesUsed = listOf("SAP_ERP", "CMMS_DATABASE", "WORKFORCE_METRICS")
+                    confidence = if (correlation.isCorrelated) (correlation.confidenceScore * 100) else 94.0,
+                    dataAvailability = if (correlation.isCorrelated) "CORRELATED_AVAILABLE" else "AVAILABLE",
+                    sourcesUsed = correlation.distinctSystems.ifEmpty { listOf("SAP_ERP", "CMMS_DATABASE", "WORKFORCE_METRICS") }
+                )
+            )
+        }
+
+        // Cross-System Signal Correlation Endpoint (PRD Addendum 2 Bagian 61.2)
+        post("/correlate-signals") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val body = call.receive<Map<String, String>>()
+            val entity = body["entityReference"] ?: "General"
+            val timeWindow = body["timeWindowHours"]?.toIntOrNull() ?: 48
+            val result = correlator.correlateSignals(tenantId, entity, timeWindow)
+            call.respond(
+                HttpStatusCode.OK,
+                mapOf(
+                    "isCorrelated" to result.isCorrelated,
+                    "entityReference" to result.entityReference,
+                    "distinctSystemsCount" to result.distinctSystemsCount,
+                    "distinctSystems" to result.distinctSystems,
+                    "contributingStreamIds" to result.contributingStreamIds,
+                    "summaryInsight" to result.summaryInsight,
+                    "riskScore" to result.riskScore,
+                    "confidenceScore" to result.confidenceScore,
+                    "impactLevel" to result.impactLevel
                 )
             )
         }
@@ -341,6 +381,13 @@ fun Route.enterpriseRoutes() {
 
         post("/chief-of-staff/synthesize") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
+            // POLA A: Dispatch via OrchestrationEngine (wf-chief-of-staff-briefing DAG)
+            orchestrationEngine.runWorkflow(
+                tenantId = tenantId,
+                workflowDefId = "wf-chief-of-staff-briefing",
+                prompt = "Synthesize daily executive briefing and anomaly correlation",
+                contextParams = mapOf("tenantId" to tenantId)
+            )
             val briefing = chiefOfStaffService.generateExecutiveBriefing(tenantId)
             call.respond(HttpStatusCode.OK, briefing)
         }

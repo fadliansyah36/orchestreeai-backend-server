@@ -218,6 +218,28 @@ class ChiefOfStaffService(
             logger.warn("Failed persisting briefing to Supabase: ${e.message}")
         }
 
+        // 5. Connect to ContinuousLearningCore: Record Decision Outcome for Chief of Staff
+        try {
+            ai.orchestree.backend.learning.ContinuousLearningCore.onNodeOutcomeAvailable(
+                ai.orchestree.backend.learning.NodeOutcomeRequest(
+                    tenantId = tenantId,
+                    agentId = "agent-chief-of-staff",
+                    agentName = "AI Chief of Staff",
+                    nodeId = "chief-of-staff-synthesis",
+                    executionId = briefing.id,
+                    workflowId = "executive-briefing",
+                    scenarioContext = "Daily Executive Briefing Synthesis",
+                    actionType = "SYNTHESIZE_EXECUTIVE_BRIEFING",
+                    predictedImpact = "Operational alignment & anomaly detection",
+                    actualOutcome = briefing.headline,
+                    outcomeSource = "MONITORING_LOOP_RESULT",
+                    isSuccess = true
+                )
+            )
+        } catch (e: Exception) {
+            logger.warn("Failed recording outcome in ContinuousLearningCore: ${e.message}")
+        }
+
         briefing
     }
 }

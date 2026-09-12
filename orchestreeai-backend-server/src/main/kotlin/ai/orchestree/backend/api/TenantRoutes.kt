@@ -3,6 +3,7 @@ package ai.orchestree.backend.api
 import ai.orchestree.backend.database.SupabaseClientProvider
 import ai.orchestree.backend.database.repositories.identity.TenantRepository
 import ai.orchestree.backend.database.repositories.taskboard.TaskRepository
+import ai.orchestree.backend.modelrouter.ModelRouter
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -302,6 +303,8 @@ fun Route.tenantRoutes() {
     val supabase = SupabaseClientProvider.fromEnv()
     val tenantRepo = TenantRepository(supabase)
     val taskRepo = TaskRepository(supabase)
+    val modelRouter = ModelRouter()
+    val orchestrationEngine = ai.orchestree.backend.orchestration.OrchestrationEngine(modelRouter = modelRouter)
 
     route("/tenants/{id}") {
         // Overview dashboard tenant (PRD Master 15.1)
@@ -618,58 +621,194 @@ fun Route.tenantRoutes() {
     route("/intel/competitors") {
         get {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    CompetitorTargetItem(
-                        id = "tgt-comp-01",
-                        tenantId = tenantId,
-                        name = "Alpha Retail Tech",
-                        category = "Retail Commerce",
-                        urls = listOf("https://alpharetail.example.com"),
-                        frequency = "daily",
-                        status = "ACTIVE"
-                    ),
-                    CompetitorTargetItem(
-                        id = "tgt-comp-02",
-                        tenantId = tenantId,
-                        name = "Beta Omnichannel Solution",
-                        category = "Enterprise SaaS",
-                        urls = listOf("https://betaomni.example.com"),
-                        frequency = "daily",
-                        status = "ACTIVE"
-                    )
-                )
-            )
+            val queryResult = supabase.queryTable("competitor_targets", tenantId)
+            val list = if (queryResult.isSuccess) {
+                val raw = queryResult.getOrDefault("[]")
+                try {
+                    val elements = kotlinx.serialization.json.Json.parseToJsonElement(raw)
+                    if (elements is kotlinx.serialization.json.JsonArray) {
+                        elements.mapNotNull { elem ->
+                            val obj = elem as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+                            val id = obj["id"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: return@mapNotNull null
+                            val name = obj["name"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: ""
+                            val category = obj["category"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: "General"
+                            val url = obj["url"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: ""
+                            val frequency = obj["crawl_frequency_hours"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: "24"
+                            val isActive = obj["is_active"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } != "false"
+                            CompetitorTargetItem(
+                                id = id,
+                                tenantId = tenantId,
+                                name = name,
+                                category = category,
+                                urls = if (url.isNotBlank()) listOf(url) else emptyList(),
+                                frequency = "${frequency}h",
+                                status = if (isActive) "ACTIVE" else "INACTIVE"
+                            )
+                        }
+                    } else emptyList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            } else {
+                emptyList()
+            }
+            call.respond(HttpStatusCode.OK, list)
         }
 
         post {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
             val req = call.receive<CompetitorTargetRequest>()
+            val targetId = "tgt-${java.util.UUID.randomUUID().toString().take(8)}"
+            val primaryUrl = req.urls.firstOrNull() ?: "https://${req.name.lowercase().replace(" ", "")}.com"
+
+            val target = ai.orchestree.backend.competitor.CompetitorTarget(
+                id = targetId,
+                tenantId = tenantId,
+                name = req.name,
+                url = primaryUrl,
+                category = req.category
+            )
+
+            // 1. Persist Target to Supabase
+            try {
+                val payload = kotlinx.serialization.json.buildJsonObject {
+                    put("id", target.id)
+                    put("tenant_id", tenantId)
+                    put("name", target.name)
+                    put("url", target.url)
+                    put("category", target.category)
+                    put("is_active", true)
+                }.toString()
+                supabase.insertRecord("competitor_targets", tenantId, payload)
+            } catch (e: Exception) {
+                // Non-blocking if table not initialized
+            }
+
+            // 2. POLA A: Dispatch via OrchestrationEngine (wf-competitor-audit DAG)
+            try {
+                orchestrationEngine.runWorkflow(
+                    tenantId = tenantId,
+                    workflowDefId = "wf-competitor-audit",
+                    prompt = "Crawl and analyze competitor: ${target.name} (${target.url})",
+                    contextParams = mapOf(
+                        "targetId" to target.id,
+                        "url" to target.url,
+                        "category" to target.category
+                    )
+                )
+            } catch (e: Exception) {
+                // Non-blocking log
+            }
+
+            // 3. Call CompetitorIntelligenceEngine (running ModelRouter and web analysis)
+            try {
+                val insight = ai.orchestree.backend.competitor.CompetitorIntelligenceEngine.analyzeCompetitorTarget(
+                    target = target,
+                    modelRouter = modelRouter,
+                    supabase = supabase
+                )
+
+                // 3. Connect to ContinuousLearningCore
+                ai.orchestree.backend.learning.ContinuousLearningCore.onNodeOutcomeAvailable(
+                    ai.orchestree.backend.learning.NodeOutcomeRequest(
+                        tenantId = tenantId,
+                        agentId = req.assignedAgentId ?: "agent-competitor-analyst",
+                        agentName = "Competitor Intelligence Agent",
+                        nodeId = "competitor-analysis-node",
+                        executionId = "crawl-${System.currentTimeMillis()}",
+                        workflowId = "competitor-crawl",
+                        scenarioContext = "${target.name} (${target.url})",
+                        actionType = "ANALYZE_COMPETITOR",
+                        predictedImpact = "Market intelligence tracking",
+                        actualOutcome = insight.summary,
+                        outcomeSource = "MONITORING_LOOP_RESULT",
+                        isSuccess = true
+                    )
+                )
+            } catch (e: Exception) {
+                // Non-blocking
+            }
+
             call.respond(
                 HttpStatusCode.Created,
                 GenericStatusResponse(
                     status = "WATCHING",
-                    id = "tgt-${java.util.UUID.randomUUID().toString().take(8)}",
+                    id = targetId,
                     message = req.name
                 )
             )
         }
 
         get("/{id}/insights") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
             val targetId = call.parameters["id"] ?: ""
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    CompetitorInsightItem(
-                        id = "ins-01",
-                        targetId = targetId,
-                        category = "PROMO_DISCOUNT",
-                        summary = "Kompetitor meluncurkan promo flash sale diskon 30%",
-                        confidence = 0.92,
-                        impactScore = 0.85
-                    )
-                )
+
+            // 1. Query existing insights from Supabase
+            val queryResult = supabase.queryTable(
+                tableName = "competitor_insights",
+                tenantId = tenantId,
+                extraParams = mapOf("target_id" to "eq.$targetId")
             )
+
+            val insights = if (queryResult.isSuccess) {
+                val raw = queryResult.getOrDefault("[]")
+                try {
+                    val elements = kotlinx.serialization.json.Json.parseToJsonElement(raw)
+                    if (elements is kotlinx.serialization.json.JsonArray && elements.isNotEmpty()) {
+                        elements.mapNotNull { elem ->
+                            val obj = elem as? kotlinx.serialization.json.JsonObject ?: return@mapNotNull null
+                            val id = obj["id"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: return@mapNotNull null
+                            val category = obj["category"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: "PROMO_MARKETING"
+                            val summary = obj["summary"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: ""
+                            val confidence = obj["confidence"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content.toDoubleOrNull() else null } ?: 0.85
+                            val impact = obj["impact_score"]?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content.toDoubleOrNull() else null } ?: 0.80
+                            CompetitorInsightItem(
+                                id = id,
+                                targetId = targetId,
+                                category = category,
+                                summary = summary,
+                                confidence = confidence,
+                                impactScore = impact
+                            )
+                        }
+                    } else emptyList()
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            } else emptyList()
+
+            // 2. If no insights exist in DB yet, trigger live on-demand analysis via CompetitorIntelligenceEngine
+            val finalInsights = if (insights.isEmpty()) {
+                val fallbackTarget = ai.orchestree.backend.competitor.CompetitorTarget(
+                    id = targetId,
+                    tenantId = tenantId,
+                    name = "Target Competitor",
+                    url = "https://competitor.example.com"
+                )
+                try {
+                    val liveInsight = ai.orchestree.backend.competitor.CompetitorIntelligenceEngine.analyzeCompetitorTarget(
+                        target = fallbackTarget,
+                        modelRouter = modelRouter,
+                        supabase = supabase
+                    )
+                    listOf(
+                        CompetitorInsightItem(
+                            id = liveInsight.id,
+                            targetId = targetId,
+                            category = liveInsight.category,
+                            summary = liveInsight.summary,
+                            confidence = liveInsight.confidence,
+                            impactScore = liveInsight.impactScore
+                        )
+                    )
+                } catch (e: Exception) {
+                    emptyList()
+                }
+            } else {
+                insights
+            }
+
+            call.respond(HttpStatusCode.OK, finalInsights)
         }
     }
 

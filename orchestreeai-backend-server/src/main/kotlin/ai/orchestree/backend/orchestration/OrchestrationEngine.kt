@@ -10,8 +10,11 @@ import ai.orchestree.backend.database.repositories.taskboard.TaskColumn
 import ai.orchestree.backend.database.repositories.taskboard.TaskRepository
 import ai.orchestree.backend.database.repositories.workforce.AgentRepository
 import ai.orchestree.backend.intelligence.IntentClassifier
+import ai.orchestree.backend.intelligence.OutputValidator
 import ai.orchestree.backend.mcptools.McpToolExecutor
 import ai.orchestree.backend.mcptools.McpToolRegistry
+import ai.orchestree.backend.memory.HybridSearchEngine
+import ai.orchestree.backend.modelrouter.ModelRouteRequest
 import ai.orchestree.backend.modelrouter.ModelRouter
 import ai.orchestree.backend.observability.WorkflowTracingManager
 import ai.orchestree.backend.observability.use
@@ -160,6 +163,40 @@ class OrchestrationEngine(
             NodeExecutionResult(NodeExecutionStatus.SUCCESS, summary)
         })
         registerNode(DeliverWorkflowNode("n4-deliver", nextNodeId = null))
+
+        // Inbound Chat Multi-Turn Workflow Nodes
+        registerNode(ClassifyWorkflowNode("chat-n1-classify", intentClassifier, nextNodeId = "chat-n2-rag"))
+        registerNode(GenericStepWorkflowNode("chat-n2-rag", WorkflowNodeType.TOOL_CALL, nextNodeId = "chat-n3-synthesize") { ctx ->
+            val prompt = ctx["prompt"]?.toString() ?: ""
+            val tenantId = ctx["tenantId"]?.toString() ?: "tenant-default"
+            val hybrid = HybridSearchEngine()
+            val results = hybrid.search(tenantId, prompt, topK = 3)
+            ctx["rag_context"] = results.joinToString("\n---\n") { it.content }
+            ctx["references"] = results.map { it.id }
+            NodeExecutionResult(NodeExecutionStatus.SUCCESS, "Retrieved ${results.size} context chunks from Company Brain")
+        })
+        registerNode(GenericStepWorkflowNode("chat-n3-synthesize", WorkflowNodeType.LLM_GENERATE, nextNodeId = "chat-n4-validate") { ctx ->
+            val prompt = ctx["prompt"]?.toString() ?: ""
+            val tenantId = ctx["tenantId"]?.toString() ?: "tenant-default"
+            val ragContext = ctx["rag_context"]?.toString() ?: ""
+            val intent = ctx["intent"]?.toString() ?: "GENERAL_INQUIRY"
+            val systemPrompt = ctx["systemPrompt"]?.toString() ?: "Anda adalah Asisten AI Bisnis OrchestreeAI."
+            val fullPrompt = "$systemPrompt\n[Intent: $intent]\n[Context: $ragContext]\nUser: $prompt\nAssistant:"
+            val res = modelRouter.execute(ModelRouteRequest(taskCategory = "REASONING", prompt = fullPrompt, tenantId = tenantId))
+            val text = if (res.isSuccess) res.getOrThrow().text else "Asisten OrchestreeAI siap membantu operasional bisnis Anda."
+            ctx["finalOutput"] = text
+            ctx["modelUsed"] = res.getOrNull()?.modelUsed ?: "nvidia-nim"
+            NodeExecutionResult(NodeExecutionStatus.SUCCESS, text)
+        })
+        registerNode(GenericStepWorkflowNode("chat-n4-validate", WorkflowNodeType.PLAN, nextNodeId = "chat-n5-deliver") { ctx ->
+            val text = ctx["finalOutput"]?.toString() ?: ""
+            val ragContext = ctx["rag_context"]?.toString() ?: ""
+            val validator = OutputValidator()
+            val valid = validator.validateGrounding(text, mapOf("context" to ragContext))
+            ctx["isGrounded"] = valid.isGrounded
+            NodeExecutionResult(NodeExecutionStatus.SUCCESS, "Output validated: isGrounded=${valid.isGrounded}")
+        })
+        registerNode(DeliverWorkflowNode("chat-n5-deliver", nextNodeId = null))
 
         // Universal AI Selection & Ranking 10-node workflow (Bagian E)
         UniversalAiSelectionWorkflowNodes.registerAll(this, modelRouter)
@@ -751,6 +788,28 @@ class OrchestrationEngine(
                     detail = "Node $nodeId selesai (${nodeResult.status}). Kolom: ${newColumn.name} - Output: ${nodeResult.output?.take(80) ?: "OK"}"
                 )
             )
+
+            // Continuous Learning Core: Record node execution outcome
+            try {
+                ai.orchestree.backend.learning.ContinuousLearningCore.onNodeOutcomeAvailable(
+                    ai.orchestree.backend.learning.NodeOutcomeRequest(
+                        tenantId = execution.tenantId,
+                        agentId = task.assigneeId.ifBlank { "agent-orchestrator" },
+                        agentName = task.assigneeName.ifBlank { "Orchestrator Agent" },
+                        nodeId = nodeId,
+                        executionId = execution.id,
+                        workflowId = execution.workflowDefId,
+                        scenarioContext = execution.context["prompt"]?.toString() ?: execution.workflowDefId,
+                        actionType = "NODE_EXECUTION",
+                        predictedImpact = "Execute workflow node $nodeId",
+                        actualOutcome = nodeResult.output?.take(200) ?: "Status: ${nodeResult.status}",
+                        outcomeSource = "MONITORING_LOOP_RESULT",
+                        isSuccess = nodeResult.status == NodeExecutionStatus.SUCCESS
+                    )
+                )
+            } catch (e: Exception) {
+                logger.warn("ContinuousLearningCore update skipped: ${e.message}")
+            }
         }
     }
 

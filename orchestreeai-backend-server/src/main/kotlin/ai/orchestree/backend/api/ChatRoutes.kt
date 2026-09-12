@@ -42,10 +42,13 @@ data class DocumentUploadRequest(
 )
 
 private val modelRouter = ModelRouter()
+private val orchestrationEngine = ai.orchestree.backend.orchestration.OrchestrationEngine(modelRouter = modelRouter)
 private val rollingMemory = ConversationRollingMemoryEngine()
 private val hybridSearch = HybridSearchEngine()
 private val embeddingPipeline = CompanyBrainEmbeddingPipeline()
 private val promptGuard = PromptInjectionGuard()
+private val intentClassifier = ai.orchestree.backend.intelligence.IntentClassifier(modelRouter)
+private val outputValidator = ai.orchestree.backend.intelligence.OutputValidator()
 
 private suspend fun io.ktor.server.routing.RoutingContext.handleChatMessage(req: ChatApiRequest) {
     val convId = req.conversationId ?: "conv-${java.util.UUID.randomUUID().toString().take(8)}"
@@ -60,53 +63,34 @@ private suspend fun io.ktor.server.routing.RoutingContext.handleChatMessage(req:
         return
     }
 
-    // 2. Fetch RAG Company Brain context via HybridSearchEngine
-    val searchResults = hybridSearch.search(req.tenantId, req.message, topK = 3)
-    val contextSnippet = if (searchResults.isNotEmpty()) {
-        "\n\n[Company Brain Knowledge]:\n" + searchResults.joinToString("\n---\n") { it.content }
-    } else ""
-
-    // 3. Build Prompt with Rolling Conversation History
-    val history = rollingMemory.getRollingHistory(convId)
-    val historyStr = if (history.isNotEmpty()) {
-        "\n[Recent Conversation]:\n" + history.joinToString("\n") { "${it.first}: ${it.second}" } + "\n"
-    } else ""
-
-    val personaPrompt = req.systemPrompt ?: "Anda adalah Asisten AI Bisnis OrchestreeAI yang profesional, analitis, dan solutif."
-    val fullPrompt = "$personaPrompt$contextSnippet$historyStr\nUser: ${req.message}\nAssistant:"
-
-    // 4. Execute via ModelRouter Multi-LLM with Fallback Chain
-    val startTime = System.currentTimeMillis()
-    val result = modelRouter.execute(
-        ModelRouteRequest(
-            taskCategory = "REASONING",
-            prompt = fullPrompt,
-            tenantId = req.tenantId
+    // 2. POLA A: Dispatch through OrchestrationEngine with full governance & audit trail
+    val wfResult = orchestrationEngine.runWorkflow(
+        tenantId = req.tenantId,
+        workflowDefId = "wf-chat-inbound",
+        prompt = req.message,
+        contextParams = mapOf(
+            "conversationId" to convId,
+            "systemPrompt" to (req.systemPrompt ?: "Anda adalah Asisten AI Bisnis OrchestreeAI yang profesional, analitis, dan solutif.")
         )
     )
-    val latency = System.currentTimeMillis() - startTime
 
-    if (result.isSuccess) {
-        val response = result.getOrThrow()
-        rollingMemory.appendMessage(convId, "User", req.message)
-        rollingMemory.appendMessage(convId, "Assistant", response.text)
+    val reply = wfResult.finalOutput ?: "Respons berhasil diproses."
+    val modelUsed = wfResult.nodeRuns.find { it.nodeId == "chat-n3-synthesize" }?.output?.take(30) ?: "nvidia-nim"
+    val refs = emptyList<String>()
 
-        call.respond(
-            HttpStatusCode.OK,
-            ChatApiResponse(
-                reply = response.text,
-                modelUsed = response.modelUsed,
-                latencyMs = latency,
-                conversationId = convId,
-                references = searchResults.map { it.id }
-            )
+    rollingMemory.appendMessage(convId, "User", req.message)
+    rollingMemory.appendMessage(convId, "Assistant", reply)
+
+    call.respond(
+        HttpStatusCode.OK,
+        ChatApiResponse(
+            reply = reply,
+            modelUsed = modelUsed,
+            latencyMs = wfResult.durationMs,
+            conversationId = convId,
+            references = refs
         )
-    } else {
-        call.respond(
-            HttpStatusCode.InternalServerError,
-            mapOf("error" to (result.exceptionOrNull()?.message ?: "Gagal memproses respons LLM"))
-        )
-    }
+    )
 }
 
 fun Route.chatRoutes() {

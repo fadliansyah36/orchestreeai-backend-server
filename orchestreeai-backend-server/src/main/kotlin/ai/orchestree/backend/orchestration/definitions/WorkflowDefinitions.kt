@@ -117,6 +117,19 @@ object WorkflowDefinitions {
                 WorkflowNodeDef("n9-recommend", "RECOMMEND", WorkflowNodeType.LLM_GENERATE, 8),
                 WorkflowNodeDef("n10-result", "RESULT", WorkflowNodeType.DELIVER, 9)
             )
+        ),
+        WorkflowDefinition(
+            id = "wf-chat-inbound",
+            name = "Inbound Conversational AI",
+            domain = "chat",
+            description = "Multi-turn conversational chat with intent classification, RAG retrieval, LLM synthesis, and grounding validation",
+            nodes = listOf(
+                WorkflowNodeDef("chat-n1-classify", "Classify User Intent", WorkflowNodeType.CLASSIFY, 0),
+                WorkflowNodeDef("chat-n2-rag", "Retrieve Company Brain RAG", WorkflowNodeType.TOOL_CALL, 1),
+                WorkflowNodeDef("chat-n3-synthesize", "Synthesize Grounded Response", WorkflowNodeType.LLM_GENERATE, 2),
+                WorkflowNodeDef("chat-n4-validate", "Validate Output Grounding", WorkflowNodeType.PLAN, 3),
+                WorkflowNodeDef("chat-n5-deliver", "Deliver Final Reply", WorkflowNodeType.DELIVER, 4)
+            )
         )
     )
 

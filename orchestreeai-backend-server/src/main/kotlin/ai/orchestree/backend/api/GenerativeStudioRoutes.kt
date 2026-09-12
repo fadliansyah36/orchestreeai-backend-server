@@ -31,6 +31,31 @@ data class BrandAssetCreateRequest(
 )
 
 @Serializable
+data class GenerateImageRequest(
+    val prompt: String? = null,
+    val productName: String? = null,
+    val targetAudience: String? = null,
+    val visualTheme: String? = null,
+    val aspectRatio: String? = "1:1",
+    val tenantId: String? = null
+)
+
+@Serializable
+data class ComposePromptRequest(
+    val productName: String,
+    val targetAudience: String,
+    val visualTheme: String,
+    val aspectRatio: String = "1:1"
+)
+
+@Serializable
+data class CampaignCreativeRequest(
+    val topic: String,
+    val platform: String = "INSTAGRAM",
+    val tenantId: String? = null
+)
+
+@Serializable
 data class BrandLogoUploadRequest(
     val fileName: String,
     val fileBase64: String,
@@ -38,13 +63,90 @@ data class BrandLogoUploadRequest(
 )
 
 fun Route.generativeStudioRoutes(
-    brandAssetService: ai.orchestree.backend.generativestudio.BrandAssetService = ai.orchestree.backend.generativestudio.BrandAssetService.defaultInstance
+    brandAssetService: ai.orchestree.backend.generativestudio.BrandAssetService = ai.orchestree.backend.generativestudio.BrandAssetService.defaultInstance,
+    generativeStudioService: ai.orchestree.backend.generativestudio.GenerativeStudioService = ai.orchestree.backend.generativestudio.GenerativeStudioService(),
+    orchestrationEngine: ai.orchestree.backend.orchestration.OrchestrationEngine = ai.orchestree.backend.orchestration.OrchestrationEngine()
 ) {
     route("/studio") {
         post("/generate-image") {
             if (!call.enforceEntitlementGate("generative_studio")) return@post
-            call.respond(HttpStatusCode.OK, mapOf("status" to "queued", "jobId" to "img-job-init"))
+            val req = try {
+                call.receive<GenerateImageRequest>()
+            } catch (e: Exception) {
+                GenerateImageRequest()
+            }
+            val tenantId = req.tenantId ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
+
+            // 1. Compose Grounded Creative Prompt if prompt not explicitly supplied
+            val finalPrompt = if (!req.prompt.isNullOrBlank()) {
+                req.prompt
+            } else {
+                val composed = ai.orchestree.backend.generativestudio.PromptComposer.composeGroundedPrompt(
+                    productName = req.productName ?: "Exclusive Commercial Product",
+                    targetAudience = req.targetAudience ?: "General Consumers",
+                    visualTheme = req.visualTheme ?: "Studio Lighting, Minimalist",
+                    aspectRatio = req.aspectRatio ?: "1:1"
+                )
+                composed.mainPrompt
+            }
+
+            // 2. POLA A: Dispatch via OrchestrationEngine (wf-marketing-campaign DAG)
+            val executionResult = orchestrationEngine.runWorkflow(
+                tenantId = tenantId,
+                workflowDefId = "wf-marketing-campaign",
+                prompt = finalPrompt,
+                contextParams = mapOf(
+                    "productName" to (req.productName ?: "Product"),
+                    "targetAudience" to (req.targetAudience ?: "General"),
+                    "visualTheme" to (req.visualTheme ?: "Studio Lighting"),
+                    "aspectRatio" to (req.aspectRatio ?: "1:1")
+                )
+            )
+
+            // 3. Execute Image Generation through ModelRouter fallback chain (GPT-Image-2 -> DALL-E 3 -> Stability AI)
+            try {
+                val imageUrl = generativeStudioService.generateImage(finalPrompt)
+
+                call.respond(
+                    HttpStatusCode.OK,
+                    mapOf(
+                        "status" to "completed",
+                        "imageUrl" to imageUrl,
+                        "prompt" to finalPrompt,
+                        "workflowExecutionId" to executionResult.executionId
+                    )
+                )
+            } catch (e: Exception) {
+                call.respond(
+                    HttpStatusCode.InternalServerError,
+                    mapOf(
+                        "status" to "failed",
+                        "error" to (e.message ?: "Image generation failed across all providers in chain")
+                    )
+                )
+            }
         }
+
+        post("/compose-prompt") {
+            if (!call.enforceEntitlementGate("generative_studio")) return@post
+            val req = call.receive<ComposePromptRequest>()
+            val composed = ai.orchestree.backend.generativestudio.PromptComposer.composeGroundedPrompt(
+                productName = req.productName,
+                targetAudience = req.targetAudience,
+                visualTheme = req.visualTheme,
+                aspectRatio = req.aspectRatio
+            )
+            call.respond(HttpStatusCode.OK, composed)
+        }
+
+        post("/campaign-creative") {
+            if (!call.enforceEntitlementGate("generative_studio")) return@post
+            val req = call.receive<CampaignCreativeRequest>()
+            val tenantId = req.tenantId ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val plan = generativeStudioService.generateCampaignCreative(tenantId, req.topic, req.platform)
+            call.respond(HttpStatusCode.OK, plan)
+        }
+
         get("/templates") {
             call.respond(HttpStatusCode.OK, emptyList<String>())
         }
