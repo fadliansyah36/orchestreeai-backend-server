@@ -56,6 +56,8 @@ class WorkflowExecutionRepository(
                 "id" to execution.id,
                 "tenant_id" to execution.tenantId,
                 "workflow_def_id" to execution.workflowDefId,
+                "trigger_source" to "OrchestrationEngine",
+                "input_payload" to (execution.currentStateSnapshot ?: "{}"),
                 "execution_status" to execution.executionStatus,
                 "status" to execution.executionStatus.uppercase(),
                 "last_completed_node_id" to (execution.lastCompletedNodeId ?: ""),

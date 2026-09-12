@@ -620,7 +620,11 @@ fun Route.tenantRoutes() {
     // Competitive Intelligence Monitoring (PRD Master 15.1, 7.1)
     route("/intel/competitors") {
         get {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val principal = call.principal<JWTPrincipal>()
+            val tenantId = call.request.headers["X-Tenant-Id"]
+                ?: call.request.queryParameters["tenantId"]
+                ?: principal?.payload?.getClaim("tenant_id")?.asString()
+                ?: "tenant-default"
             val queryResult = supabase.queryTable("competitor_targets", tenantId)
             val list = if (queryResult.isSuccess) {
                 val raw = queryResult.getOrDefault("[]")
@@ -656,7 +660,11 @@ fun Route.tenantRoutes() {
         }
 
         post {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val principal = call.principal<JWTPrincipal>()
+            val tenantId = call.request.headers["X-Tenant-Id"]
+                ?: call.request.queryParameters["tenantId"]
+                ?: principal?.payload?.getClaim("tenant_id")?.asString()
+                ?: "tenant-default"
             val req = call.receive<CompetitorTargetRequest>()
             val targetId = "tgt-${java.util.UUID.randomUUID().toString().take(8)}"
             val primaryUrl = req.urls.firstOrNull() ?: "https://${req.name.lowercase().replace(" ", "")}.com"
@@ -677,7 +685,10 @@ fun Route.tenantRoutes() {
                     put("name", target.name)
                     put("url", target.url)
                     put("category", target.category)
-                    put("is_active", true)
+                    put("frequency", "24h")
+                    put("insight_prefs", "{}")
+                    put("status", "ACTIVE")
+                    put("last_monitored_at", java.time.Instant.now().toString())
                 }.toString()
                 supabase.insertRecord("competitor_targets", tenantId, payload)
             } catch (e: Exception) {
@@ -740,8 +751,12 @@ fun Route.tenantRoutes() {
         }
 
         get("/{id}/insights") {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
             val targetId = call.parameters["id"] ?: ""
+            val principal = call.principal<JWTPrincipal>()
+            val tenantId = call.request.headers["X-Tenant-Id"]
+                ?: call.request.queryParameters["tenantId"]
+                ?: principal?.payload?.getClaim("tenant_id")?.asString()
+                ?: "tenant-default"
 
             // 1. Query existing insights from Supabase
             val queryResult = supabase.queryTable(
