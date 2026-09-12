@@ -5,6 +5,7 @@ import ai.orchestree.backend.database.repositories.orchestration.WorkflowExecuti
 import ai.orchestree.backend.orchestration.OrchestrationEngine
 import ai.orchestree.backend.orchestration.WorkflowExecutionResult
 import ai.orchestree.backend.plugins.configureAuthentication
+import ai.orchestree.backend.plugins.configureCORS
 import ai.orchestree.backend.plugins.configureHTTPS
 import ai.orchestree.backend.plugins.configureRouting
 import ai.orchestree.backend.plugins.configureSerialization
@@ -61,6 +62,7 @@ fun main() {
 
 fun Application.module(config: AppConfig = AppConfig.load()) {
     logger.info("Initializing OrchestreeAI Ktor Modules & Pipelines...")
+    configureCORS(config)
     configureSerialization()
     configureRequestValidation()
     configureServerRateLimiting()

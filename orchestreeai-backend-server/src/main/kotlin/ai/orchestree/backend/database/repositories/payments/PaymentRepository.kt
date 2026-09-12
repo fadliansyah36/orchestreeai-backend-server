@@ -190,9 +190,15 @@ class PaymentRepository(
         }
 
         return try {
-            ai.orchestree.backend.billing.DatabaseManager.getConnection()
+            val dmConn = ai.orchestree.backend.billing.DatabaseManager.getConnection()
+            if (dmConn == null) {
+                val targetHost = extractHostPort(ai.orchestree.backend.billing.DatabaseManager.databaseUrl)
+                logger.warn("Database direct connection not available to target $targetHost: fallback to synchronized memory storage (check GKE VPC connector / firewall for direct PostgreSQL port 5432 or pooler port 6543)")
+            }
+            dmConn
         } catch (e: Throwable) {
-            logger.debug("Database direct connection not available: ${e.message}")
+            val targetHost = extractHostPort(ai.orchestree.backend.billing.DatabaseManager.databaseUrl)
+            logger.warn("Database direct connection not available to target $targetHost: ${e.message}")
             null
         }
     }

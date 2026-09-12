@@ -38,25 +38,5 @@ fun Application.configureHTTPS() {
     }
 
     install(HttpsEnforcementPlugin)
-
-    install(CORS) {
-        allowMethod(HttpMethod.Options)
-        allowMethod(HttpMethod.Put)
-        allowMethod(HttpMethod.Patch)
-        allowMethod(HttpMethod.Delete)
-        allowMethod(HttpMethod.Post)
-        allowMethod(HttpMethod.Get)
-        allowHeader(HttpHeaders.Authorization)
-        allowHeader(HttpHeaders.ContentType)
-        allowHeader("X-Tenant-Id")
-        allowHeader("X-Request-Id")
-        allowHeader("Idempotency-Key")
-        allowHeader("X-CSRF-Token")
-        allowHeader("X-Admin-Role")
-        allowHeader("X-Operator-Id")
-        allowHeader("X-Forwarded-For")
-        exposeHeader("X-CSRF-Token")
-        anyHost()
-    }
 }
 

@@ -81,6 +81,7 @@ fun Application.configureRouting() {
 
         // Direct Authentication Routes (/auth/login, /auth/refresh, etc.)
         authRoutes()
+        adminPublicSecurityRoutes()
 
         route("/api/v1") {
             // Public Authentication Routes

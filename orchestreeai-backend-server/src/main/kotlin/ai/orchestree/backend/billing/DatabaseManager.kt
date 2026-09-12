@@ -51,7 +51,8 @@ object DatabaseManager {
                 DriverManager.getConnection(jdbcUrl, props)
             } else null
         } catch (e: Throwable) {
-            logger.warn("Database direct connection could not be established: ${e.message}")
+            val target = try { java.net.URI(databaseUrl.removePrefix("jdbc:")).let { "${it.host}:${if (it.port != -1) it.port else 5432}" } } catch (_: Exception) { "unknown-target" }
+            logger.warn("Database direct connection to target $target could not be established (check GKE VPC connector / firewall egress rules): ${e.message}")
             null
         }
     }

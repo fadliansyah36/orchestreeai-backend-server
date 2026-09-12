@@ -319,6 +319,13 @@ open class ProviderRegistryRepository(
         return llmCache[code.uppercase()]
     }
 
+    fun updateProviderStatus(code: String, isEnabled: Boolean, healthStatus: String) {
+        val existing = llmCache[code.uppercase()]
+        if (existing != null) {
+            llmCache[code.uppercase()] = existing.copy(isEnabled = isEnabled, healthStatus = healthStatus)
+        }
+    }
+
     companion object {
         val instance by lazy { ProviderRegistryRepository() }
 

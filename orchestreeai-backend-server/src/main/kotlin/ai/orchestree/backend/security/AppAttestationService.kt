@@ -1,11 +1,13 @@
 package ai.orchestree.backend.security
 
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.install
 import io.ktor.server.request.header
+import io.ktor.server.request.httpMethod
 import io.ktor.server.request.path
 import io.ktor.server.response.respond
 import kotlinx.serialization.Serializable
@@ -145,12 +147,19 @@ class AppAttestationService(
             return verifyHmac(path + timestamp, appSignature)
         }
 
-        // 2. Native client identity verification (Android client headers)
+        // 2. Recognition of Web Admin Dashboard
+        // Note: Origin header can be spoofed outside browsers (e.g. via curl), so for truly sensitive
+        // endpoints, primary protection remains JWT verification in authenticate("supabase-auth").
+        if (origin == "https://admin.orchestree.biz.id") {
+            return true
+        }
+
+        // 3. Native client identity verification (Android client headers)
         if (clientPlatform == "Android-Native" || origin == "android-app://ai.orchestree.app" || requestedWith == "ai.orchestree.app" || csrfHeader == "1") {
             return true
         }
 
-        // 3. In development or internal environments, allow if valid Host
+        // 4. In development or internal environments, allow if valid Host
         val env = ai.orchestree.backend.config.EnvLoader.get("APPLICATION_ENV", "development")
         return env == "development" || env == "test"
     }
@@ -180,6 +189,9 @@ class AppAttestationService(
         }
 
         return normalized == "/auth/login" ||
+               normalized == "/admin/auth/login" ||
+               normalized == "/admin/auth/verify-mfa" ||
+               normalized == "/admin/login" ||
                normalized.startsWith("/billing/adjust") ||
                normalized.startsWith("/billing/checkout") ||
                normalized.startsWith("/billing/topup") ||
@@ -198,6 +210,9 @@ val AppAttestationPlugin = createApplicationPlugin(name = "AppAttestationPlugin"
     val logger = LoggerFactory.getLogger("ai.orchestree.backend.security.AppAttestationPlugin")
 
     onCall { call ->
+        // Early return for CORS preflight OPTIONS requests without custom headers
+        if (call.request.httpMethod == HttpMethod.Options) return@onCall
+
         val path = call.request.path()
         if (path == "/health" || path == "/api/health" || path == "/") return@onCall
 
@@ -215,8 +230,12 @@ val AppAttestationPlugin = createApplicationPlugin(name = "AppAttestationPlugin"
             return@onCall
         }
 
-        // 2. Sensitive endpoints require Play Integrity token
-        if (service.isSensitiveEndpoint(path)) {
+        // 2. Sensitive endpoints require Play Integrity token for Android native clients
+        // Skip Play Integrity for Web Admin Dashboard browsers
+        val origin = call.request.header("Origin")
+        val isWebAdmin = origin == "https://admin.orchestree.biz.id"
+
+        if (!isWebAdmin && service.isSensitiveEndpoint(path)) {
             val integrityToken = call.request.header("X-Play-Integrity-Token")
             if (integrityToken.isNullOrBlank()) {
                 val env = ai.orchestree.backend.config.EnvLoader.get("APPLICATION_ENV", "development")

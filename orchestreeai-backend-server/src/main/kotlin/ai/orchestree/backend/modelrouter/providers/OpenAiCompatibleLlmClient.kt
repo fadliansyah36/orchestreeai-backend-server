@@ -133,14 +133,16 @@ class OpenAiCompatibleLlmClient(
     companion object {
         fun resolveFallbackModel(providerId: String): String {
             val p = providerId.lowercase().trim()
-            return when {
-                p.contains("nvidia") -> ai.orchestree.backend.config.EnvLoader.get("NVIDIA_MODEL_NAME", "meta/llama-3.1-70b-instruct")
-                p.contains("openrouter") -> ai.orchestree.backend.config.EnvLoader.get("OPENROUTER_MODEL_NAME", "meta-llama/llama-3.1-70b-instruct")
-                p.contains("groq") -> ai.orchestree.backend.config.EnvLoader.get("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
-                p.contains("deepseek") -> ai.orchestree.backend.config.EnvLoader.get("DEEPSEEK_MODEL_NAME", "deepseek-chat")
-                p.contains("anthropic") -> ai.orchestree.backend.config.EnvLoader.get("ANTHROPIC_MODEL_NAME", "claude-3-5-sonnet-20241022")
-                else -> ""
+            val resolved = when {
+                p.contains("nvidia") -> ai.orchestree.backend.config.EnvLoader.get("NVIDIA_MODEL_NAME").ifBlank { "meta/llama-3.1-70b-instruct" }
+                p.contains("openrouter") -> ai.orchestree.backend.config.EnvLoader.get("OPENROUTER_MODEL_NAME").ifBlank { "meta-llama/llama-3.1-70b-instruct" }
+                p.contains("groq") -> ai.orchestree.backend.config.EnvLoader.get("GROQ_MODEL_NAME").ifBlank { "llama-3.3-70b-versatile" }
+                p.contains("deepseek") -> ai.orchestree.backend.config.EnvLoader.get("DEEPSEEK_MODEL_NAME").ifBlank { "deepseek-chat" }
+                p.contains("anthropic") -> ai.orchestree.backend.config.EnvLoader.get("ANTHROPIC_MODEL_NAME").ifBlank { "claude-3-5-sonnet-20241022" }
+                p.contains("mistral") -> ai.orchestree.backend.config.EnvLoader.get("MISTRAL_MODEL_NAME").ifBlank { "mistral-large-latest" }
+                else -> ai.orchestree.backend.config.EnvLoader.get("DEFAULT_LLM_MODEL").ifBlank { "gpt-4o-mini" }
             }
+            return resolved.trim()
         }
     }
 }

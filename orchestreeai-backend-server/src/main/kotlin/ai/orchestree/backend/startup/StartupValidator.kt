@@ -164,9 +164,18 @@ class StartupValidator(
 
             if (response.status == io.ktor.http.HttpStatusCode.Unauthorized || response.status.value == 401) {
                 val specificMsg = "Groq Cloud: Invalid API Key (HTTP 401). GROQ_API_KEY in pod/Kubernetes secret is invalid, revoked, or expired!"
-                logger.error("[STARTUP ERROR] $specificMsg")
+                logger.warn("[STARTUP WARNING] $specificMsg - Provider Groq dinonaktifkan. Sistem menggunakan gateway utama NVIDIA NIM dan OpenRouter.")
+                try {
+                    ai.orchestree.backend.database.repositories.modelrouter.ProviderRegistryRepository.instance.updateProviderStatus("GROQ", isEnabled = false, healthStatus = "disabled")
+                } catch (_: Exception) {}
+
+                val hasOtherPrimaryLlm = listOf(
+                    ai.orchestree.backend.config.EnvLoader.get("NVIDIA_API_KEY"),
+                    ai.orchestree.backend.config.EnvLoader.get("OPENROUTER_API_KEY")
+                ).any { it.isNotBlank() }
+
                 val env = ai.orchestree.backend.config.EnvLoader.get("APPLICATION_ENV", "development")
-                if (env.equals("production", ignoreCase = true)) {
+                if (env.equals("production", ignoreCase = true) && !hasOtherPrimaryLlm) {
                     handleFatalFailure("GroqCredentials", specificMsg)
                 }
             } else if (response.status.isSuccess()) {
