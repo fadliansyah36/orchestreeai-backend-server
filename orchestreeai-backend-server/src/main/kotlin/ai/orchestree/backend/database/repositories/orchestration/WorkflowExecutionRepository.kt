@@ -49,17 +49,10 @@ class WorkflowExecutionRepository(
     }
 
     private fun getJdbcConnection(): java.sql.Connection? {
-        val dbUrl = EnvLoader.get("DATABASE_URL")
-        if (dbUrl.isBlank() || dbUrl == "placeholder") return null
         return try {
-            val jdbcUrl = if (!dbUrl.startsWith("jdbc:")) "jdbc:$dbUrl" else dbUrl
-            Class.forName("org.postgresql.Driver")
-            val props = Properties().apply {
-                setProperty("sslmode", "disable")
-            }
-            DriverManager.getConnection(jdbcUrl, props)
+            ai.orchestree.backend.billing.DatabaseManager.getConnection()
         } catch (e: Exception) {
-            logger.warn("Could not establish JDBC connection to DATABASE_URL: ${e.message}")
+            logger.warn("Could not establish JDBC connection via DatabaseManager: ${e.message}")
             null
         }
     }
@@ -78,7 +71,17 @@ class WorkflowExecutionRepository(
             "wf-competitor-audit" -> 3
             else -> 5
         }
-        val inputPayload = execution.currentStateSnapshot?.takeIf { it.isNotBlank() } ?: "{}"
+        val inputPayload = execution.context.toJson().takeIf { it.isNotBlank() && it != "{}" }
+            ?: execution.currentStateSnapshot?.takeIf { it.isNotBlank() && it != "{}" }
+            ?: run {
+                val fallbackMap = mapOf(
+                    "prompt" to (execution.context["prompt"]?.toString() ?: ""),
+                    "tenantId" to execution.tenantId,
+                    "executionId" to execution.id,
+                    "workflowDefId" to execution.workflowDefId
+                )
+                fallbackMap.toJson()
+            }
 
         var dbSuccess = false
         var lastException: Exception? = null
@@ -91,7 +94,7 @@ class WorkflowExecutionRepository(
                         id, tenant_id, workflow_def_id, trigger_source, input_payload,
                         status, execution_status, current_step_index, total_steps,
                         started_at, current_state_snapshot, last_completed_node_id, last_updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, now())
+                    ) VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?, ?, ?, ?::jsonb, ?, now())
                     ON CONFLICT (id) DO UPDATE SET
                         status = EXCLUDED.status,
                         execution_status = EXCLUDED.execution_status,
@@ -155,9 +158,10 @@ class WorkflowExecutionRepository(
             }
         }
 
-        if (!dbSuccess && lastException != null) {
-            logger.error("FATAL: Failed to insert workflow execution into database: ${lastException.message}. Payload: id=${execution.id}, tenant=${execution.tenantId}, def=${execution.workflowDefId}", lastException)
-            throw lastException
+        if (!dbSuccess) {
+            val ex = lastException ?: IllegalStateException("Failed to persist workflow execution ${execution.id}: No database connection available")
+            logger.error("FATAL: Failed to insert workflow execution into database: ${ex.message}. Payload: id=${execution.id}, tenant=${execution.tenantId}, def=${execution.workflowDefId}", ex)
+            throw ex
         }
 
         Result.success(execution)

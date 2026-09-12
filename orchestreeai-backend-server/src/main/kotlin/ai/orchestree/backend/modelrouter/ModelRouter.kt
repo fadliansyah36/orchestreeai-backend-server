@@ -104,8 +104,6 @@ class ModelRouter(
         put("openrouter", openRouterClient)
         put("groq", groqClient)
         put("gpt_image_2", gptImage2Client)
-        put("gemini", geminiClient)
-        put("google_gemini", geminiClient)
     }
 
     suspend fun route(request: ModelRouteRequest): Result<LlmResponse> = execute(request)
@@ -155,12 +153,14 @@ class ModelRouter(
         val activeProviders = providerRepo.getLlmProvidersOrderedByFallbackPriority()
             .filter { it.isEnabled && it.healthStatus != "disabled" }
             .map { it.providerCode.lowercase() }
+            .filter { it !in setOf("gemini", "google_gemini", "openai", "openai_dalle", "anthropic") }
             .filter { providers.containsKey(it) }
+        val effectiveProviders = if (activeProviders.isNotEmpty()) activeProviders else listOf("nvidia_nim", "openrouter")
 
         val attemptedProviders = mutableListOf<String>()
         val providerErrors = mutableMapOf<String, String>()
 
-        for (providerId in activeProviders) {
+        for (providerId in effectiveProviders) {
             if (getCircuitBreakerState(providerId) == CircuitBreakerState.OPEN) {
                 logger.warn("Circuit breaker for $providerId is OPEN. Skipping.")
                 continue
@@ -281,66 +281,99 @@ class ModelRouter(
     }
 
     /**
-     * Image Generation Fallback Chain:
-     * Tier 1: GPT-Image-2 (Apimart)
-     * Tier 2: OpenAI DALL-E 3
-     * Tier 3: Stability AI SDXL
-     * If all fail: throw ImageGenerationFailedException
+     * Image/Design Generation Fallback Chain:
+     * Priority 1: GPT-Image-2 (Apimart Studio)
+     * Priority 2: OpenRouter (Design & Generative Model)
+     * Priority 3: NVIDIA NIM (Design & Visual Model)
+     * OpenAI DALL-E and Gemini are excluded per system specification.
      */
     suspend fun generateImage(prompt: String, tenantId: String?): Result<String> {
-        val imageProviders = providerRepo.getImageProviders().filter { it.isEnabled }
-        val sortedProviders = imageProviders.sortedBy { it.priority }
-
         val errors = mutableMapOf<String, String>()
-        for (provider in sortedProviders) {
-            try {
-                when (provider.providerCode.uppercase()) {
-                    "GPT_IMAGE_2" -> {
-                        val apiKey = ai.orchestree.backend.config.EnvLoader.get("GPT_IMAGE_API_KEY").ifBlank {
-                            ai.orchestree.backend.config.EnvLoader.get("GPT_IMAGE_2_API_KEY").ifBlank {
-                                ai.orchestree.backend.config.EnvLoader.get("APIMART_API_KEY")
-                            }
-                        }
-                        if (apiKey.isBlank()) {
-                            errors["GPT_IMAGE_2"] = "Apimart API key not configured (GPT_IMAGE_API_KEY / GPT_IMAGE_2_API_KEY / APIMART_API_KEY missing)"
-                        } else {
-                            val res = gptImage2Client.complete(LlmRequest(prompt = prompt, model = provider.defaultModel))
-                            if (res.isSuccess) {
-                                return Result.success(res.getOrThrow().text)
-                            } else {
-                                errors["GPT_IMAGE_2"] = res.exceptionOrNull()?.message ?: "Failed"
-                            }
-                        }
-                    }
-                    "OPENAI_DALLE" -> {
-                        val apiKey = ai.orchestree.backend.config.EnvLoader.get("OPENAI_API_KEY")
-                        if (apiKey.isBlank()) {
-                            errors["OPENAI_DALLE"] = "OpenAI API key not configured (OPENAI_API_KEY missing)"
-                        } else {
-                            val openAiImageClient = GptImage2Client(
-                                apiKeyProvider = { apiKey },
-                                apiUrlProvider = { "https://api.openai.com/v1/images/generations" }
-                            )
-                            val res = openAiImageClient.complete(LlmRequest(prompt = prompt, model = "dall-e-3"))
-                            if (res.isSuccess) return Result.success(res.getOrThrow().text)
-                            else errors["OPENAI_DALLE"] = res.exceptionOrNull()?.message ?: "Failed"
-                        }
-                    }
-                    "STABILITY_AI" -> {
-                        val apiKey = ai.orchestree.backend.config.EnvLoader.get("STABILITY_API_KEY")
-                        if (apiKey.isBlank()) {
-                            errors["STABILITY_AI"] = "Stability API key not configured (STABILITY_API_KEY missing)"
-                        } else {
-                            errors["STABILITY_AI"] = "Stability AI endpoint requires multipart/REST client, not configured"
-                        }
-                    }
+
+        // 1. Priority 1: GPT-Image-2 (Apimart Studio)
+        try {
+            val apiKey = ai.orchestree.backend.config.EnvLoader.get("GPT_IMAGE_API_KEY").ifBlank {
+                ai.orchestree.backend.config.EnvLoader.get("GPT_IMAGE_2_API_KEY").ifBlank {
+                    ai.orchestree.backend.config.EnvLoader.get("APIMART_API_KEY")
                 }
-            } catch (e: Exception) {
-                errors[provider.providerCode] = e.message ?: "Exception"
             }
+            if (apiKey.isBlank()) {
+                errors["GPT_IMAGE_2"] = "Apimart API key not configured"
+            } else {
+                logger.info("Attempting image generation via Priority 1: GPT-Image-2 (Apimart)")
+                val res = gptImage2Client.complete(LlmRequest(prompt = prompt, model = "gpt-image-2"))
+                if (res.isSuccess && res.getOrThrow().text.isNotBlank()) {
+                    return Result.success(res.getOrThrow().text)
+                } else {
+                    val errMsg = res.exceptionOrNull()?.message ?: "GPT-Image-2 returned empty text"
+                    errors["GPT_IMAGE_2"] = errMsg
+                    logger.warn("Priority 1 (GPT-Image-2) failed: $errMsg. Falling back to Priority 2 (OpenRouter)...")
+                }
+            }
+        } catch (e: Exception) {
+            errors["GPT_IMAGE_2"] = e.message ?: "Exception in GPT-Image-2"
+            logger.warn("Exception in Priority 1 (GPT-Image-2): ${e.message}")
         }
 
-        val ex = ImageGenerationFailedException("All image generation providers in chain failed: $errors")
+        // 2. Priority 2: OpenRouter (Design & Generative Studio)
+        try {
+            val openRouterKey = ai.orchestree.backend.config.EnvLoader.get("OPENROUTER_API_KEY")
+            if (openRouterKey.isBlank()) {
+                errors["OPENROUTER"] = "OpenRouter API key not configured"
+            } else {
+                logger.info("Attempting design generation via Priority 2: OpenRouter")
+                val designPrompt = "Generate high quality visual design asset or direct image rendering for: $prompt"
+                val imageModel = ai.orchestree.backend.config.EnvLoader.get("OPENROUTER_IMAGE_MODEL", "black-forest-labs/flux-1-schnell")
+                val openRouterReq = LlmRequest(
+                    prompt = designPrompt,
+                    model = imageModel
+                )
+                val res = openRouterClient.complete(openRouterReq)
+                if (res.isSuccess && res.getOrThrow().text.isNotBlank()) {
+                    val text = res.getOrThrow().text.trim()
+                    val extractedUrl = Regex("""https?://[^\s)"]+""").find(text)?.value ?: text
+                    return Result.success(extractedUrl)
+                } else {
+                    val errMsg = res.exceptionOrNull()?.message ?: "OpenRouter returned empty design output"
+                    errors["OPENROUTER"] = errMsg
+                    logger.warn("Priority 2 (OpenRouter) failed: $errMsg. Falling back to Priority 3 (NVIDIA NIM)...")
+                }
+            }
+        } catch (e: Exception) {
+            errors["OPENROUTER"] = e.message ?: "Exception in OpenRouter design generation"
+            logger.warn("Exception in Priority 2 (OpenRouter): ${e.message}")
+        }
+
+        // 3. Priority 3: NVIDIA NIM (Design & Visual Studio)
+        try {
+            val nvidiaKey = ai.orchestree.backend.config.EnvLoader.get("NVIDIA_API_KEY")
+            if (nvidiaKey.isBlank()) {
+                errors["NVIDIA_NIM"] = "NVIDIA NIM API key not configured"
+            } else {
+                logger.info("Attempting design generation via Priority 3: NVIDIA NIM")
+                val designPrompt = "Produce full creative design visual specifications, vector asset or renderable layout for: $prompt"
+                val nvidiaModel = ai.orchestree.backend.config.EnvLoader.get("NVIDIA_IMAGE_MODEL", "meta/llama-3.2-11b-vision-instruct")
+                val nvidiaReq = LlmRequest(
+                    prompt = designPrompt,
+                    model = nvidiaModel
+                )
+                val res = nvidiaNimClient.complete(nvidiaReq)
+                if (res.isSuccess && res.getOrThrow().text.isNotBlank()) {
+                    val text = res.getOrThrow().text.trim()
+                    val extractedUrl = Regex("""https?://[^\s)"]+""").find(text)?.value ?: text
+                    return Result.success(extractedUrl)
+                } else {
+                    val errMsg = res.exceptionOrNull()?.message ?: "NVIDIA NIM returned empty design output"
+                    errors["NVIDIA_NIM"] = errMsg
+                }
+            }
+        } catch (e: Exception) {
+            errors["NVIDIA_NIM"] = e.message ?: "Exception in NVIDIA NIM design generation"
+            logger.warn("Exception in Priority 3 (NVIDIA NIM): ${e.message}")
+        }
+
+        val ex = ImageGenerationFailedException("All image/design generation providers in chain failed: $errors")
+        logger.error("Image/Design generation chain exhausted: $errors")
         return Result.failure(ex)
     }
 

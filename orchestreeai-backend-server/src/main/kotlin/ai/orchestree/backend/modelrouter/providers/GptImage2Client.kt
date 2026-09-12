@@ -67,7 +67,14 @@ class GptImage2Client(
 
             val responseJson = json.parseToJsonElement(rawBody).jsonObject
             val dataArr = responseJson["data"]?.jsonArray
-            val imageUrl = dataArr?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content ?: ""
+            val imageUrl = dataArr?.firstOrNull()?.jsonObject?.get("url")?.jsonPrimitive?.content
+                ?: dataArr?.firstOrNull()?.jsonObject?.get("b64_json")?.jsonPrimitive?.content
+                ?: ""
+
+            if (imageUrl.isBlank()) {
+                val errMsg = responseJson["error"]?.toString() ?: "No image URL returned from GPT-Image-2 API: $rawBody"
+                return@withContext Result.failure(RuntimeException(errMsg))
+            }
 
             Result.success(
                 LlmResponse(

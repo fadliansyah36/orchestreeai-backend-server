@@ -62,6 +62,8 @@ data class BrandLogoUploadRequest(
     val tenantId: String? = null
 )
 
+private val logger = org.slf4j.LoggerFactory.getLogger("ai.orchestree.backend.api.GenerativeStudioRoutes")
+
 fun Route.generativeStudioRoutes(
     brandAssetService: ai.orchestree.backend.generativestudio.BrandAssetService = ai.orchestree.backend.generativestudio.BrandAssetService.defaultInstance,
     generativeStudioService: ai.orchestree.backend.generativestudio.GenerativeStudioService = ai.orchestree.backend.generativestudio.GenerativeStudioService(),
@@ -90,20 +92,26 @@ fun Route.generativeStudioRoutes(
                 composed.mainPrompt
             }
 
-            // 2. POLA A: Dispatch via OrchestrationEngine (wf-marketing-campaign DAG)
-            val executionResult = orchestrationEngine.runWorkflow(
-                tenantId = tenantId,
-                workflowDefId = "wf-marketing-campaign",
-                prompt = finalPrompt,
-                contextParams = mapOf(
-                    "productName" to (req.productName ?: "Product"),
-                    "targetAudience" to (req.targetAudience ?: "General"),
-                    "visualTheme" to (req.visualTheme ?: "Studio Lighting"),
-                    "aspectRatio" to (req.aspectRatio ?: "1:1")
+            // 2. Dispatch via OrchestrationEngine (wf-marketing-campaign DAG) safely
+            var executionId: String? = null
+            try {
+                val executionResult = orchestrationEngine.runWorkflow(
+                    tenantId = tenantId,
+                    workflowDefId = "wf-marketing-campaign",
+                    prompt = finalPrompt,
+                    contextParams = mapOf(
+                        "productName" to (req.productName ?: "Product"),
+                        "targetAudience" to (req.targetAudience ?: "General"),
+                        "visualTheme" to (req.visualTheme ?: "Studio Lighting"),
+                        "aspectRatio" to (req.aspectRatio ?: "1:1")
+                    )
                 )
-            )
+                executionId = executionResult.executionId
+            } catch (e: Exception) {
+                logger.warn("Workflow dispatch for marketing-campaign encountered non-blocking warning: ${e.message}")
+            }
 
-            // 3. Execute Image Generation through ModelRouter fallback chain (GPT-Image-2 -> DALL-E 3 -> Stability AI)
+            // 3. Execute Image/Design Generation through ModelRouter fallback chain (GPT-Image-2 -> OpenRouter -> NVIDIA NIM)
             try {
                 val imageUrl = generativeStudioService.generateImage(finalPrompt)
 
@@ -113,15 +121,17 @@ fun Route.generativeStudioRoutes(
                         "status" to "completed",
                         "imageUrl" to imageUrl,
                         "prompt" to finalPrompt,
-                        "workflowExecutionId" to executionResult.executionId
+                        "workflowExecutionId" to (executionId ?: "direct-gen")
                     )
                 )
             } catch (e: Exception) {
+                logger.error("Studio generate-image failed: ${e.message}", e)
                 call.respond(
                     HttpStatusCode.InternalServerError,
                     mapOf(
                         "status" to "failed",
-                        "error" to (e.message ?: "Image generation failed across all providers in chain")
+                        "error" to (e.message ?: "Image generation failed across all providers in chain"),
+                        "prompt" to finalPrompt
                     )
                 )
             }

@@ -605,7 +605,7 @@ class OrchestrationEngine(
         )
         execution.context = context
 
-        workflowExecutionRepo.createExecution(execution)
+        workflowExecutionRepo.createExecution(execution).getOrThrow()
         run(execution)
     }
 

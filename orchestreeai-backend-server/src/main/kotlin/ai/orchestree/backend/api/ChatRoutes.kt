@@ -16,14 +16,19 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import kotlinx.serialization.Serializable
 
+private val logger = org.slf4j.LoggerFactory.getLogger("ai.orchestree.backend.api.ChatRoutes")
+
 @Serializable
 data class ChatApiRequest(
-    val message: String,
+    val message: String = "",
+    val prompt: String = "",
     val tenantId: String = "tenant-default",
     val conversationId: String? = null,
     val agentId: String? = null,
     val systemPrompt: String? = null
-)
+) {
+    val actualMessage: String get() = message.ifBlank { prompt }
+}
 
 @Serializable
 data class ChatApiResponse(
@@ -120,7 +125,12 @@ fun Route.chatRoutes() {
     route("/agents") {
         post("/{agentId}/chat") {
             val agentId = call.parameters["agentId"] ?: "general-agent"
-            val req = call.receive<ChatApiRequest>()
+            val req = try {
+                call.receive<ChatApiRequest>()
+            } catch (e: Exception) {
+                logger.warn("Could not deserialize ChatApiRequest: ${e.message}")
+                ChatApiRequest()
+            }
             val convId = req.conversationId ?: "agent-$agentId-${java.util.UUID.randomUUID().toString().take(6)}"
 
             val agentPersona = when (agentId) {
@@ -131,36 +141,52 @@ fun Route.chatRoutes() {
                 else -> "Anda adalah AI Autonomous Workforce Agent untuk OrchestreeAI."
             }
 
-            val fullPrompt = "$agentPersona\nUser: ${req.message}\nAssistant:"
+            val userMessage = req.actualMessage.ifBlank { "Halo, silakan perkenalkan peran Anda." }
+            val fullPrompt = "$agentPersona\nUser: $userMessage\nAssistant:"
             val startTime = System.currentTimeMillis()
             val tenant = req.tenantId.ifBlank { "tenant-default" }
-            val result = modelRouter.execute(
-                ModelRouteRequest(
-                    taskCategory = "REASONING",
-                    prompt = fullPrompt,
-                    tenantId = tenant
-                )
-            )
 
-            if (result.isSuccess) {
-                val response = result.getOrThrow()
-                call.respond(
-                    HttpStatusCode.OK,
-                    ChatApiResponse(
-                        reply = response.text,
-                        modelUsed = response.modelUsed,
-                        latencyMs = System.currentTimeMillis() - startTime,
-                        conversationId = convId
+            logger.info("Executing agent chat: agentId=$agentId, tenant=$tenant, message=$userMessage")
+
+            try {
+                val result = modelRouter.execute(
+                    ModelRouteRequest(
+                        taskCategory = "REASONING",
+                        prompt = fullPrompt,
+                        tenantId = tenant
                     )
                 )
-            } else {
-                val ex = result.exceptionOrNull()
+
+                if (result.isSuccess) {
+                    val response = result.getOrThrow()
+                    call.respond(
+                        HttpStatusCode.OK,
+                        ChatApiResponse(
+                            reply = response.text,
+                            modelUsed = response.modelUsed,
+                            latencyMs = System.currentTimeMillis() - startTime,
+                            conversationId = convId
+                        )
+                    )
+                } else {
+                    val ex = result.exceptionOrNull()
+                    logger.error("ModelRouter error for agentId=$agentId: ${ex?.message}", ex)
+                    call.respond(
+                        HttpStatusCode.InternalServerError,
+                        mapOf(
+                            "status" to "failed",
+                            "error" to (ex?.message ?: "Gagal memproses respons agent"),
+                            "details" to if (ex is ai.orchestree.backend.modelrouter.AllProvidersInChainFailedException) ex.providerErrors else emptyMap<String, String>()
+                        )
+                    )
+                }
+            } catch (t: Throwable) {
+                logger.error("Unhandled exception in agent chat route for agentId=$agentId: ${t.message}", t)
                 call.respond(
                     HttpStatusCode.InternalServerError,
                     mapOf(
                         "status" to "failed",
-                        "error" to (ex?.message ?: "Gagal memproses respons agent"),
-                        "details" to if (ex is ai.orchestree.backend.modelrouter.AllProvidersInChainFailedException) ex.providerErrors else emptyMap<String, String>()
+                        "error" to (t.message ?: "Internal error during agent chat execution")
                     )
                 )
             }

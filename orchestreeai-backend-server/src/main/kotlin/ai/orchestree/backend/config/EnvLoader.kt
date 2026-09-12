@@ -38,12 +38,12 @@ object EnvLoader {
 
     fun get(key: String, default: String = ""): String {
         val envVal = System.getenv(key)
-        if (!envVal.isNullOrBlank() && envVal != "placeholder") return envVal
+        if (!envVal.isNullOrBlank() && !envVal.contains("placeholder", ignoreCase = true)) return envVal
         if (properties.isEmpty()) {
             loadAll()
         }
         val propVal = properties[key]
-        if (!propVal.isNullOrBlank() && propVal != "placeholder") return propVal
+        if (!propVal.isNullOrBlank() && !propVal.contains("placeholder", ignoreCase = true)) return propVal
         return default
     }
 }
