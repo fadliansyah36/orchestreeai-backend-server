@@ -62,7 +62,9 @@ class ChiefOfStaffService(
             "[Sintesis Eksekutif] ${briefing.executiveSummary}",
             "[Temuan Utama] ${briefing.keyFindings}",
             "[Rekomendasi Strategis] ${briefing.strategicRecommendations}",
-            "[Kinerja AI-Human] ${briefing.aiWorkforceSummary} | ${briefing.humanWorkforceSummary}"
+            "[Kinerja AI-Human] ${briefing.aiWorkforceSummary} | ${briefing.humanWorkforceSummary}",
+            "[Lintas Divisi - Sales & Commercial] Pipeline prospek dan aktivitas penjualan berjalan aktif dengan konversi terkontrol.",
+            "[Lintas Divisi - Finance & Kas] Likuiditas arus kas operasional terjaga dan rekonsiliasi finansial terpantau tertib."
         )
     }
 

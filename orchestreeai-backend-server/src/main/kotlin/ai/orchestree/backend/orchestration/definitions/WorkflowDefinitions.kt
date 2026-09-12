@@ -88,6 +88,19 @@ object WorkflowDefinitions {
             )
         ),
         WorkflowDefinition(
+            id = "wf-proactive-briefing",
+            name = "Proactive Daily Executive Briefing",
+            domain = "executive",
+            description = "Proactive daily telemetry aggregation, anomaly detection, strategic correlation, and multi-channel executive briefing",
+            nodes = listOf(
+                WorkflowNodeDef("n1-aggregate-metrics", "Aggregate Enterprise Telemetry & KPIs", WorkflowNodeType.TOOL_CALL, 0),
+                WorkflowNodeDef("n2-anomaly-detection", "Detect Anomalies & Outliers", WorkflowNodeType.PLAN, 1),
+                WorkflowNodeDef("n3-strategic-correlation", "Correlate Strategic Initiatives", WorkflowNodeType.PLAN, 2),
+                WorkflowNodeDef("n4-synthesize-briefing", "Synthesize Executive Briefing via LLM", WorkflowNodeType.LLM_GENERATE, 3),
+                WorkflowNodeDef("n5-distribute-channels", "Deliver to Executive Channels", WorkflowNodeType.DELIVER, 4)
+            )
+        ),
+        WorkflowDefinition(
             id = "wf-world-monitor-scan",
             name = "World Monitor Macro Trend Scan",
             domain = "intelligence",
