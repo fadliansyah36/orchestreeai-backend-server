@@ -150,5 +150,22 @@ fun Application.configureRequestValidation() {
                 )
             )
         }
+
+        exception<Throwable> { call, cause ->
+            logger.error("Unhandled exception processing request ${call.request.local.uri}: ${cause.message}", cause)
+            val statusCode = when (cause) {
+                is IllegalArgumentException -> HttpStatusCode.BadRequest
+                is NoSuchElementException -> HttpStatusCode.NotFound
+                else -> HttpStatusCode.InternalServerError
+            }
+            call.respond(
+                statusCode,
+                mapOf(
+                    "status" to "error",
+                    "error" to (cause.message ?: "Internal Server Error"),
+                    "type" to (cause::class.simpleName ?: "Exception")
+                )
+            )
+        }
     }
 }

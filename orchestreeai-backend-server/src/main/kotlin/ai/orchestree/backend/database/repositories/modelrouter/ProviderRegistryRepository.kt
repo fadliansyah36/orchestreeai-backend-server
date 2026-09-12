@@ -117,7 +117,7 @@ open class ProviderRegistryRepository(
                 priority = 99,
                 fallbackPriority = 99,
                 taskSpecialization = "legacy",
-                defaultModel = EnvLoader.get("DEEPSEEK_MODEL_NAME", "deepseek-chat"),
+                defaultModel = EnvLoader.get("DEEPSEEK_MODEL_NAME", "deepseek-reasoner"),
                 isEnabled = false,
                 latencyMs = 160,
                 healthStatus = "disabled"
@@ -131,7 +131,7 @@ open class ProviderRegistryRepository(
                 priority = 99,
                 fallbackPriority = 99,
                 taskSpecialization = "legacy",
-                defaultModel = EnvLoader.get("ANTHROPIC_MODEL_NAME", "claude-3-5-sonnet-20241022"),
+                defaultModel = EnvLoader.get("ANTHROPIC_MODEL_NAME", "claude-sonnet-latest"),
                 isEnabled = false,
                 latencyMs = 240,
                 healthStatus = "disabled"
@@ -334,8 +334,8 @@ open class ProviderRegistryRepository(
                 "NVIDIA_NIM", "NVIDIA" -> EnvLoader.get("NVIDIA_MODEL_NAME", "meta/llama-3.1-70b-instruct")
                 "OPENROUTER" -> EnvLoader.get("OPENROUTER_MODEL_NAME", "meta-llama/llama-3.1-70b-instruct")
                 "GROQ" -> EnvLoader.get("GROQ_MODEL_NAME", "llama-3.3-70b-versatile")
-                "DEEPSEEK" -> EnvLoader.get("DEEPSEEK_MODEL_NAME", "deepseek-chat")
-                "ANTHROPIC" -> EnvLoader.get("ANTHROPIC_MODEL_NAME", "claude-3-5-sonnet-20241022")
+                "DEEPSEEK" -> EnvLoader.get("DEEPSEEK_MODEL_NAME", "deepseek-reasoner")
+                "ANTHROPIC" -> EnvLoader.get("ANTHROPIC_MODEL_NAME", "claude-sonnet-latest")
                 "GEMINI", "GOOGLE_GEMINI" -> EnvLoader.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
                 else -> ""
             }

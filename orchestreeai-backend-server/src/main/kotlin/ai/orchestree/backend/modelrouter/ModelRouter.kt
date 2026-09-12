@@ -19,8 +19,15 @@ import java.util.concurrent.atomic.AtomicInteger
 class AllProvidersInChainFailedException(
     val taskCategory: String,
     val candidateProviders: List<String>,
+    val providerErrors: Map<String, String> = emptyMap(),
     cause: Throwable? = null
-) : RuntimeException("All LLM providers in chain failed for task '$taskCategory'. Candidates: $candidateProviders", cause)
+) : RuntimeException(
+    if (providerErrors.isNotEmpty())
+        "All LLM providers in chain failed for task '$taskCategory'. Candidates: $candidateProviders. Errors: $providerErrors"
+    else
+        "All LLM providers in chain failed for task '$taskCategory'. Candidates: $candidateProviders",
+    cause
+)
 
 class ImageGenerationFailedException(
     message: String = "All image generation providers in chain failed (Tier 1: GPT-Image-2, Tier 2: OpenAI DALL-E 3, Tier 3: Stability AI SDXL)",
@@ -97,9 +104,8 @@ class ModelRouter(
         put("openrouter", openRouterClient)
         put("groq", groqClient)
         put("gpt_image_2", gptImage2Client)
-        if (ai.orchestree.backend.config.AppConfig.hasGeminiApiKeyConfigured()) {
-            put("gemini", geminiClient)
-        }
+        put("gemini", geminiClient)
+        put("google_gemini", geminiClient)
     }
 
     suspend fun route(request: ModelRouteRequest): Result<LlmResponse> = execute(request)
@@ -167,7 +173,12 @@ class ModelRouter(
                 request.model
             } else {
                 val candidateModels = modelRepo.getActiveModelsForTier(providerId, complexityTier)
-                candidateModels.firstOrNull()?.modelIdentifier ?: ""
+                val resolvedFromRepo = candidateModels.firstOrNull()?.modelIdentifier
+                if (!resolvedFromRepo.isNullOrBlank()) {
+                    resolvedFromRepo
+                } else {
+                    OpenAiCompatibleLlmClient.resolveFallbackModel(providerId)
+                }
             }
 
             val sanitizedPrompt = outputValidator.sanitizePromptBeforeLlmCall(
@@ -226,7 +237,7 @@ class ModelRouter(
         }
 
         logger.error("Structured LLM Failure Log: All configured providers failed for task '${request.taskCategory}'. Attempted: $attemptedProviders. Errors: $providerErrors")
-        return Result.failure(AllProvidersInChainFailedException(request.taskCategory, attemptedProviders))
+        return Result.failure(AllProvidersInChainFailedException(request.taskCategory, attemptedProviders, providerErrors))
     }
 
     private fun recordUsage(
@@ -285,19 +296,32 @@ class ModelRouter(
             try {
                 when (provider.providerCode.uppercase()) {
                     "GPT_IMAGE_2" -> {
-                        val res = gptImage2Client.complete(LlmRequest(prompt = prompt, model = provider.defaultModel))
-                        if (res.isSuccess) {
-                            return Result.success(res.getOrThrow().text)
+                        val apiKey = ai.orchestree.backend.config.EnvLoader.get("GPT_IMAGE_API_KEY").ifBlank {
+                            ai.orchestree.backend.config.EnvLoader.get("GPT_IMAGE_2_API_KEY").ifBlank {
+                                ai.orchestree.backend.config.EnvLoader.get("APIMART_API_KEY")
+                            }
+                        }
+                        if (apiKey.isBlank()) {
+                            errors["GPT_IMAGE_2"] = "Apimart API key not configured (GPT_IMAGE_API_KEY / GPT_IMAGE_2_API_KEY / APIMART_API_KEY missing)"
                         } else {
-                            errors["GPT_IMAGE_2"] = res.exceptionOrNull()?.message ?: "Failed"
+                            val res = gptImage2Client.complete(LlmRequest(prompt = prompt, model = provider.defaultModel))
+                            if (res.isSuccess) {
+                                return Result.success(res.getOrThrow().text)
+                            } else {
+                                errors["GPT_IMAGE_2"] = res.exceptionOrNull()?.message ?: "Failed"
+                            }
                         }
                     }
                     "OPENAI_DALLE" -> {
                         val apiKey = ai.orchestree.backend.config.EnvLoader.get("OPENAI_API_KEY")
                         if (apiKey.isBlank()) {
-                            errors["OPENAI_DALLE"] = "API key not configured"
+                            errors["OPENAI_DALLE"] = "OpenAI API key not configured (OPENAI_API_KEY missing)"
                         } else {
-                            val res = gptImage2Client.complete(LlmRequest(prompt = prompt, model = "dall-e-3"))
+                            val openAiImageClient = GptImage2Client(
+                                apiKeyProvider = { apiKey },
+                                apiUrlProvider = { "https://api.openai.com/v1/images/generations" }
+                            )
+                            val res = openAiImageClient.complete(LlmRequest(prompt = prompt, model = "dall-e-3"))
                             if (res.isSuccess) return Result.success(res.getOrThrow().text)
                             else errors["OPENAI_DALLE"] = res.exceptionOrNull()?.message ?: "Failed"
                         }
@@ -305,11 +329,9 @@ class ModelRouter(
                     "STABILITY_AI" -> {
                         val apiKey = ai.orchestree.backend.config.EnvLoader.get("STABILITY_API_KEY")
                         if (apiKey.isBlank()) {
-                            errors["STABILITY_AI"] = "API key not configured"
+                            errors["STABILITY_AI"] = "Stability API key not configured (STABILITY_API_KEY missing)"
                         } else {
-                            val res = gptImage2Client.complete(LlmRequest(prompt = prompt, model = "sdxl-turbo"))
-                            if (res.isSuccess) return Result.success(res.getOrThrow().text)
-                            else errors["STABILITY_AI"] = res.exceptionOrNull()?.message ?: "Failed"
+                            errors["STABILITY_AI"] = "Stability AI endpoint requires multipart/REST client, not configured"
                         }
                     }
                 }

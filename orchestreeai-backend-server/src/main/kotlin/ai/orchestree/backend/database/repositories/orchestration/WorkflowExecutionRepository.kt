@@ -1,5 +1,6 @@
 package ai.orchestree.backend.database.repositories.orchestration
 
+import ai.orchestree.backend.config.EnvLoader
 import ai.orchestree.backend.database.SupabaseClientProvider
 import ai.orchestree.backend.orchestration.WorkflowExecution
 import ai.orchestree.backend.orchestration.parseJsonToMap
@@ -12,6 +13,8 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.slf4j.LoggerFactory
+import java.sql.DriverManager
+import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 
 class WorkflowExecutionRepository(
@@ -45,32 +48,119 @@ class WorkflowExecutionRepository(
         }
     }
 
+    private fun getJdbcConnection(): java.sql.Connection? {
+        val dbUrl = EnvLoader.get("DATABASE_URL")
+        if (dbUrl.isBlank() || dbUrl == "placeholder") return null
+        return try {
+            val jdbcUrl = if (!dbUrl.startsWith("jdbc:")) "jdbc:$dbUrl" else dbUrl
+            Class.forName("org.postgresql.Driver")
+            val props = Properties().apply {
+                setProperty("sslmode", "disable")
+            }
+            DriverManager.getConnection(jdbcUrl, props)
+        } catch (e: Exception) {
+            logger.warn("Could not establish JDBC connection to DATABASE_URL: ${e.message}")
+            null
+        }
+    }
+
     suspend fun createExecution(execution: WorkflowExecution): Result<WorkflowExecution> = withContext(Dispatchers.IO) {
         inMemoryStore[execution.id] = execution
-        if (!supabase.isConfigured()) {
-            return@withContext Result.success(execution)
+
+        val totalSteps = when (execution.workflowDefId) {
+            "wf-chat-inbound" -> 5
+            "universal_ai_selection" -> 10
+            "wf-task-auto-execute" -> 5
+            "wf-marketing-campaign" -> 4
+            "wf-chief-of-staff-briefing" -> 5
+            "wf-world-monitor-scan" -> 4
+            "wf-enterprise-cross-system-correlation" -> 5
+            "wf-competitor-audit" -> 3
+            else -> 5
+        }
+        val inputPayload = execution.currentStateSnapshot?.takeIf { it.isNotBlank() } ?: "{}"
+
+        var dbSuccess = false
+        var lastException: Exception? = null
+
+        // 1. Try Direct JDBC (PostgreSQL / Supabase direct or pooler)
+        try {
+            getJdbcConnection()?.use { conn ->
+                val sql = """
+                    INSERT INTO workflow_executions (
+                        id, tenant_id, workflow_def_id, trigger_source, input_payload,
+                        status, execution_status, current_step_index, total_steps,
+                        started_at, current_state_snapshot, last_completed_node_id, last_updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, now())
+                    ON CONFLICT (id) DO UPDATE SET
+                        status = EXCLUDED.status,
+                        execution_status = EXCLUDED.execution_status,
+                        current_step_index = EXCLUDED.current_step_index,
+                        total_steps = EXCLUDED.total_steps,
+                        current_state_snapshot = EXCLUDED.current_state_snapshot,
+                        last_completed_node_id = EXCLUDED.last_completed_node_id,
+                        last_updated_at = now()
+                """.trimIndent()
+                conn.prepareStatement(sql).use { stmt ->
+                    stmt.setString(1, execution.id)
+                    stmt.setString(2, execution.tenantId)
+                    stmt.setString(3, execution.workflowDefId)
+                    stmt.setString(4, "OrchestrationEngine")
+                    stmt.setString(5, inputPayload)
+                    stmt.setString(6, execution.executionStatus.uppercase())
+                    stmt.setString(7, execution.executionStatus.lowercase())
+                    stmt.setInt(8, 0)
+                    stmt.setInt(9, totalSteps)
+                    stmt.setLong(10, execution.startedAt)
+                    stmt.setString(11, inputPayload)
+                    stmt.setString(12, execution.lastCompletedNodeId ?: "")
+                    stmt.executeUpdate()
+                }
+                logger.info("Successfully inserted workflow_execution ${execution.id} to PostgreSQL database via JDBC")
+                dbSuccess = true
+            }
+        } catch (e: Exception) {
+            logger.error("JDBC insert error on workflow_executions (${execution.id}): ${e.message}", e)
+            lastException = e
         }
 
-        try {
-            val payload = mapOf(
-                "id" to execution.id,
-                "tenant_id" to execution.tenantId,
-                "workflow_def_id" to execution.workflowDefId,
-                "trigger_source" to "OrchestrationEngine",
-                "input_payload" to (execution.currentStateSnapshot ?: "{}"),
-                "execution_status" to execution.executionStatus,
-                "status" to execution.executionStatus.uppercase(),
-                "last_completed_node_id" to (execution.lastCompletedNodeId ?: ""),
-                "current_state_snapshot" to (execution.currentStateSnapshot ?: "{}"),
-                "started_at" to execution.startedAt,
-                "last_updated_at" to System.currentTimeMillis()
-            )
-            supabase.insertRecord("workflow_executions", execution.tenantId, payload.toJson())
-            Result.success(execution)
-        } catch (e: Exception) {
-            logger.warn("Supabase insert execution warning (in-memory preserved): ${e.message}")
-            Result.success(execution)
+        // 2. Try Supabase REST Client if JDBC was not configured or failed
+        if (!dbSuccess && supabase.isConfigured()) {
+            try {
+                val payload = mapOf(
+                    "id" to execution.id,
+                    "tenant_id" to execution.tenantId,
+                    "workflow_def_id" to execution.workflowDefId,
+                    "trigger_source" to "OrchestrationEngine",
+                    "input_payload" to inputPayload,
+                    "status" to execution.executionStatus.uppercase(),
+                    "execution_status" to execution.executionStatus.lowercase(),
+                    "current_step_index" to 0,
+                    "total_steps" to totalSteps,
+                    "started_at" to execution.startedAt,
+                    "last_completed_node_id" to (execution.lastCompletedNodeId ?: "")
+                )
+                val res = supabase.insertRecord("workflow_executions", execution.tenantId, payload.toJson())
+                if (res.isSuccess) {
+                    logger.info("Successfully inserted workflow_execution ${execution.id} via Supabase REST")
+                    dbSuccess = true
+                } else {
+                    val ex = res.exceptionOrNull() ?: RuntimeException("Supabase insert returned failure")
+                    logger.error("Supabase REST insert failed on workflow_executions (${execution.id}): ${ex.message}", ex)
+                    lastException = ex as? Exception ?: RuntimeException(ex.message, ex)
+                }
+            } catch (e: Exception) {
+                logger.error("Exception in Supabase REST insert for workflow_executions (${execution.id}): ${e.message}", e)
+                lastException = e
+            }
         }
+
+        if (!dbSuccess && lastException != null) {
+            logger.error("FATAL: Failed to insert workflow execution into database: ${lastException.message}. Payload: id=${execution.id}, tenant=${execution.tenantId}, def=${execution.workflowDefId}", lastException)
+            throw lastException
+        }
+
+        Result.success(execution)
     }
 
     suspend fun saveCheckpoint(
@@ -87,30 +177,64 @@ class WorkflowExecutionRepository(
             existing.lastUpdatedAt = System.currentTimeMillis()
         }
 
-        if (!supabase.isConfigured()) {
-            return@withContext Result.success(true)
+        var dbSuccess = false
+        var lastException: Exception? = null
+
+        // 1. Try Direct JDBC
+        try {
+            getJdbcConnection()?.use { conn ->
+                val sql = """
+                    UPDATE workflow_executions
+                    SET current_state_snapshot = ?::jsonb,
+                        last_completed_node_id = ?,
+                        execution_status = ?,
+                        status = ?,
+                        last_updated_at = now()
+                    WHERE id = ?
+                """.trimIndent()
+                conn.prepareStatement(sql).use { stmt ->
+                    stmt.setString(1, currentStateSnapshot.ifBlank { "{}" })
+                    stmt.setString(2, lastCompletedNodeId)
+                    stmt.setString(3, status.lowercase())
+                    stmt.setString(4, status.uppercase())
+                    stmt.setString(5, executionId)
+                    stmt.executeUpdate()
+                }
+                dbSuccess = true
+            }
+        } catch (e: Exception) {
+            logger.error("JDBC error saving checkpoint for $executionId: ${e.message}", e)
+            lastException = e
         }
 
-        val tenantId = existing?.tenantId ?: "tenant-default"
-        try {
-            val payload = mapOf(
-                "current_state_snapshot" to currentStateSnapshot,
-                "last_completed_node_id" to lastCompletedNodeId,
-                "execution_status" to status,
-                "status" to status.uppercase(),
-                "last_updated_at" to System.currentTimeMillis()
-            )
-            supabase.updateRecord(
-                tableName = "workflow_executions",
-                tenantId = tenantId,
-                filter = "id=eq.$executionId",
-                jsonPayload = payload.toJson()
-            )
-            Result.success(true)
-        } catch (e: Exception) {
-            logger.warn("Failed saving checkpoint to Supabase for $executionId: ${e.message}")
-            Result.success(true)
+        // 2. Try Supabase REST
+        if (!dbSuccess && supabase.isConfigured()) {
+            val tenantId = existing?.tenantId ?: "tenant-default"
+            try {
+                val payload = mapOf(
+                    "last_completed_node_id" to lastCompletedNodeId,
+                    "execution_status" to status.lowercase(),
+                    "status" to status.uppercase()
+                )
+                supabase.updateRecord(
+                    tableName = "workflow_executions",
+                    tenantId = tenantId,
+                    filter = "id=eq.$executionId",
+                    jsonPayload = payload.toJson()
+                )
+                dbSuccess = true
+            } catch (e: Exception) {
+                logger.error("Failed saving checkpoint to Supabase for $executionId: ${e.message}", e)
+                lastException = e
+            }
         }
+
+        if (!dbSuccess && lastException != null) {
+            logger.error("FATAL: Failed saving checkpoint for $executionId: ${lastException.message}", lastException)
+            throw lastException
+        }
+
+        Result.success(true)
     }
 
     suspend fun updateStatus(executionId: String, status: String): Result<Boolean> = withContext(Dispatchers.IO) {
@@ -123,31 +247,79 @@ class WorkflowExecutionRepository(
             }
         }
 
-        if (!supabase.isConfigured()) {
-            return@withContext Result.success(true)
+        var dbSuccess = false
+        var lastException: Exception? = null
+
+        // 1. Try Direct JDBC
+        try {
+            getJdbcConnection()?.use { conn ->
+                val isFinished = status.equals("completed", ignoreCase = true) || status.equals("failed", ignoreCase = true)
+                val sql = if (isFinished) {
+                    """
+                        UPDATE workflow_executions
+                        SET execution_status = ?,
+                            status = ?,
+                            completed_at = ?,
+                            last_updated_at = now()
+                        WHERE id = ?
+                    """.trimIndent()
+                } else {
+                    """
+                        UPDATE workflow_executions
+                        SET execution_status = ?,
+                            status = ?,
+                            last_updated_at = now()
+                        WHERE id = ?
+                    """.trimIndent()
+                }
+                conn.prepareStatement(sql).use { stmt ->
+                    stmt.setString(1, status.lowercase())
+                    stmt.setString(2, status.uppercase())
+                    if (isFinished) {
+                        stmt.setLong(3, System.currentTimeMillis())
+                        stmt.setString(4, executionId)
+                    } else {
+                        stmt.setString(3, executionId)
+                    }
+                    stmt.executeUpdate()
+                }
+                dbSuccess = true
+            }
+        } catch (e: Exception) {
+            logger.error("JDBC error updating status for $executionId: ${e.message}", e)
+            lastException = e
         }
 
-        val tenantId = existing?.tenantId ?: "tenant-default"
-        try {
-            val payload = mutableMapOf<String, Any>(
-                "execution_status" to status,
-                "status" to status.uppercase(),
-                "last_updated_at" to System.currentTimeMillis()
-            )
-            if (status == "completed" || status == "failed") {
-                payload["completed_at"] = System.currentTimeMillis()
+        // 2. Try Supabase REST
+        if (!dbSuccess && supabase.isConfigured()) {
+            val tenantId = existing?.tenantId ?: "tenant-default"
+            try {
+                val payload = mutableMapOf<String, Any>(
+                    "execution_status" to status.lowercase(),
+                    "status" to status.uppercase()
+                )
+                if (status == "completed" || status == "failed") {
+                    payload["completed_at"] = System.currentTimeMillis()
+                }
+                supabase.updateRecord(
+                    tableName = "workflow_executions",
+                    tenantId = tenantId,
+                    filter = "id=eq.$executionId",
+                    jsonPayload = payload.toJson()
+                )
+                dbSuccess = true
+            } catch (e: Exception) {
+                logger.error("Failed updating status to Supabase for $executionId: ${e.message}", e)
+                lastException = e
             }
-            supabase.updateRecord(
-                tableName = "workflow_executions",
-                tenantId = tenantId,
-                filter = "id=eq.$executionId",
-                jsonPayload = payload.toJson()
-            )
-            Result.success(true)
-        } catch (e: Exception) {
-            logger.warn("Failed updating status to Supabase for $executionId: ${e.message}")
-            Result.success(true)
         }
+
+        if (!dbSuccess && lastException != null) {
+            logger.error("FATAL: Failed updating status for $executionId: ${lastException.message}", lastException)
+            throw lastException
+        }
+
+        Result.success(true)
     }
 
     suspend fun findStaleRunning(olderThanMinutes: Long = 5): List<WorkflowExecution> = withContext(Dispatchers.IO) {
@@ -185,8 +357,40 @@ class WorkflowExecutionRepository(
         return@withContext staleFromMemory
     }
 
-    suspend fun getById(executionId: String): WorkflowExecution? {
-        return inMemoryStore[executionId]
+    suspend fun getById(executionId: String): WorkflowExecution? = withContext(Dispatchers.IO) {
+        val mem = inMemoryStore[executionId]
+        if (mem != null) return@withContext mem
+
+        try {
+            getJdbcConnection()?.use { conn ->
+                val sql = "SELECT id, tenant_id, workflow_def_id, execution_status, last_completed_node_id, current_state_snapshot, started_at, EXTRACT(EPOCH FROM last_updated_at)*1000 AS last_updated_ms FROM workflow_executions WHERE id = ?"
+                conn.prepareStatement(sql).use { stmt ->
+                    stmt.setString(1, executionId)
+                    val rs = stmt.executeQuery()
+                    if (rs.next()) {
+                        val snapshot = rs.getString("current_state_snapshot")
+                        val startedAt = rs.getLong("started_at")
+                        val lastUpdated = rs.getLong("last_updated_ms")
+                        val exec = WorkflowExecution(
+                            id = rs.getString("id"),
+                            tenantId = rs.getString("tenant_id"),
+                            workflowDefId = rs.getString("workflow_def_id"),
+                            lastCompletedNodeId = rs.getString("last_completed_node_id"),
+                            executionStatus = rs.getString("execution_status") ?: "running",
+                            currentStateSnapshot = snapshot,
+                            startedAt = startedAt,
+                            lastUpdatedAt = if (lastUpdated > 0) lastUpdated else startedAt
+                        )
+                        if (snapshot != null) exec.context = parseJsonToMap(snapshot)
+                        inMemoryStore[executionId] = exec
+                        return@withContext exec
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.warn("Error fetching workflow_execution $executionId from JDBC: ${e.message}")
+        }
+        null
     }
 
     fun registerExecutionInMemory(execution: WorkflowExecution) {
@@ -197,6 +401,56 @@ class WorkflowExecutionRepository(
 
     suspend fun listRecentExecutions(limit: Int = 50, tenantId: String? = null): List<WorkflowExecution> = withContext(Dispatchers.IO) {
         val memoryList = inMemoryStore.values.filter { tenantId == null || it.tenantId == tenantId }
+
+        // 1. Try JDBC
+        try {
+            getJdbcConnection()?.use { conn ->
+                val sql = if (tenantId != null) {
+                    "SELECT id, tenant_id, workflow_def_id, execution_status, last_completed_node_id, current_state_snapshot, started_at, EXTRACT(EPOCH FROM last_updated_at)*1000 AS last_updated_ms FROM workflow_executions WHERE tenant_id = ? ORDER BY started_at DESC LIMIT ?"
+                } else {
+                    "SELECT id, tenant_id, workflow_def_id, execution_status, last_completed_node_id, current_state_snapshot, started_at, EXTRACT(EPOCH FROM last_updated_at)*1000 AS last_updated_ms FROM workflow_executions ORDER BY started_at DESC LIMIT ?"
+                }
+                conn.prepareStatement(sql).use { stmt ->
+                    if (tenantId != null) {
+                        stmt.setString(1, tenantId)
+                        stmt.setInt(2, limit)
+                    } else {
+                        stmt.setInt(1, limit)
+                    }
+                    val rs = stmt.executeQuery()
+                    val dbList = mutableListOf<WorkflowExecution>()
+                    while (rs.next()) {
+                        val id = rs.getString("id")
+                        val tId = rs.getString("tenant_id")
+                        val wDefId = rs.getString("workflow_def_id")
+                        val execStatus = rs.getString("execution_status") ?: "running"
+                        val lastCompleted = rs.getString("last_completed_node_id")
+                        val snapshot = rs.getString("current_state_snapshot")
+                        val startedAt = rs.getLong("started_at")
+                        val lastUpdated = rs.getLong("last_updated_ms")
+                        val context = if (snapshot != null) parseJsonToMap(snapshot) else mutableMapOf()
+                        val exec = WorkflowExecution(
+                            id = id,
+                            tenantId = tId,
+                            workflowDefId = wDefId,
+                            lastCompletedNodeId = lastCompleted,
+                            executionStatus = execStatus,
+                            currentStateSnapshot = snapshot,
+                            startedAt = startedAt,
+                            lastUpdatedAt = if (lastUpdated > 0) lastUpdated else startedAt
+                        )
+                        exec.context = context
+                        dbList.add(exec)
+                    }
+                    if (dbList.isNotEmpty()) {
+                        val combined = (memoryList + dbList).distinctBy { it.id }.sortedByDescending { it.lastUpdatedAt }
+                        return@withContext combined.take(limit)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.warn("JDBC error listing workflow_executions: ${e.message}")
+        }
         if (!supabase.isConfigured()) {
             return@withContext memoryList.sortedByDescending { it.lastUpdatedAt }.take(limit)
         }

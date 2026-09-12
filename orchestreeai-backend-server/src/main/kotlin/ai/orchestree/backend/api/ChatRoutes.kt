@@ -133,11 +133,12 @@ fun Route.chatRoutes() {
 
             val fullPrompt = "$agentPersona\nUser: ${req.message}\nAssistant:"
             val startTime = System.currentTimeMillis()
+            val tenant = req.tenantId.ifBlank { "tenant-default" }
             val result = modelRouter.execute(
                 ModelRouteRequest(
                     taskCategory = "REASONING",
                     prompt = fullPrompt,
-                    tenantId = req.tenantId
+                    tenantId = tenant
                 )
             )
 
@@ -153,9 +154,14 @@ fun Route.chatRoutes() {
                     )
                 )
             } else {
+                val ex = result.exceptionOrNull()
                 call.respond(
                     HttpStatusCode.InternalServerError,
-                    mapOf("error" to "Gagal memproses respons agent")
+                    mapOf(
+                        "status" to "failed",
+                        "error" to (ex?.message ?: "Gagal memproses respons agent"),
+                        "details" to if (ex is ai.orchestree.backend.modelrouter.AllProvidersInChainFailedException) ex.providerErrors else emptyMap<String, String>()
+                    )
                 )
             }
         }

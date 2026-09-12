@@ -89,6 +89,17 @@ fun Application.module(config: AppConfig = AppConfig.load()) {
         }
     }
 
+    // 5. Dynamic Model & Provider Catalog Sync from Database
+    launch {
+        try {
+            ai.orchestree.backend.database.repositories.modelrouter.LlmProviderModelRepository.instance.syncFromDatabase()
+            ai.orchestree.backend.database.repositories.modelrouter.ProviderRegistryRepository.instance.syncFromDatabase()
+            logger.info("[STARTUP] Dynamic model catalog synchronized from database.")
+        } catch (e: Exception) {
+            logger.warn("[STARTUP] Error during initial model catalog sync: ${e.message}")
+        }
+    }
+
     // Graceful shutdown hook
     monitor.subscribe(ApplicationStopped) {
         logger.info("Server stopping: shutting down Background Scheduler Engine...")

@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory
 
 class GeminiLlmClient(
     private val apiKeyProvider: () -> String,
-    private val defaultModel: String = "gemini-3.5-flash-lite",
+    private val defaultModel: String = "gemini-2.5-flash",
     private val httpClient: HttpClient = HttpClient(CIO)
 ) : LlmClient {
 

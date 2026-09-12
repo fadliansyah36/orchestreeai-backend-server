@@ -70,22 +70,50 @@ open class LlmProviderModelRepository(
     }
 
     open fun getActiveModelsForTier(providerCode: String, tier: String): List<LlmProviderModelEntity> {
-        val code = providerCode.uppercase()
+        val code = providerCode.uppercase().trim()
         val normalizedTier = tier.lowercase().trim()
+
+        if (modelCache.isEmpty()) {
+            try {
+                kotlinx.coroutines.runBlocking { syncFromDatabase() }
+            } catch (e: Exception) {
+                logger.warn("Could not lazily sync models from database: ${e.message}")
+            }
+        }
+
         val matching = modelCache.values.filter {
-            it.isActive && it.providerCode.uppercase() == code && it.complexityTier.lowercase() == normalizedTier
+            it.isActive && it.providerCode.equals(code, ignoreCase = true) && it.complexityTier.lowercase() == normalizedTier
         }
         if (matching.isNotEmpty()) return matching
 
         // Tier fallback within the same provider:
         // 'frontier' / 'complex' fallback to 'moderate'
         // 'trivial' / 'simple' fallback to 'moderate'
-        return when (normalizedTier) {
-            "frontier" -> modelCache.values.filter { it.isActive && it.providerCode.uppercase() == code && it.complexityTier in listOf("complex", "moderate") }
-            "complex" -> modelCache.values.filter { it.isActive && it.providerCode.uppercase() == code && it.complexityTier in listOf("frontier", "moderate") }
-            "simple", "trivial" -> modelCache.values.filter { it.isActive && it.providerCode.uppercase() == code && it.complexityTier in listOf("simple", "trivial", "moderate") }
-            else -> modelCache.values.filter { it.isActive && it.providerCode.uppercase() == code }
+        val tierFallback = when (normalizedTier) {
+            "frontier" -> modelCache.values.filter { it.isActive && it.providerCode.equals(code, ignoreCase = true) && it.complexityTier in listOf("complex", "moderate") }
+            "complex" -> modelCache.values.filter { it.isActive && it.providerCode.equals(code, ignoreCase = true) && it.complexityTier in listOf("frontier", "moderate") }
+            "simple", "trivial" -> modelCache.values.filter { it.isActive && it.providerCode.equals(code, ignoreCase = true) && it.complexityTier in listOf("simple", "trivial", "moderate") }
+            else -> modelCache.values.filter { it.isActive && it.providerCode.equals(code, ignoreCase = true) }
         }
+        if (tierFallback.isNotEmpty()) return tierFallback
+
+        val anyForProvider = modelCache.values.filter { it.isActive && it.providerCode.equals(code, ignoreCase = true) }
+        if (anyForProvider.isNotEmpty()) return anyForProvider
+
+        val fallbackId = ai.orchestree.backend.modelrouter.providers.OpenAiCompatibleLlmClient.resolveFallbackModel(code)
+        if (fallbackId.isNotBlank()) {
+            val synthetic = LlmProviderModelEntity(
+                id = "fallback-$code-$fallbackId",
+                providerId = "llm-$code",
+                providerCode = code,
+                modelIdentifier = fallbackId,
+                complexityTier = normalizedTier,
+                isActive = true
+            )
+            return listOf(synthetic)
+        }
+
+        return emptyList()
     }
 
     open fun classifyComplexityTier(modelId: String, contextWindow: Int = 131072): String {
