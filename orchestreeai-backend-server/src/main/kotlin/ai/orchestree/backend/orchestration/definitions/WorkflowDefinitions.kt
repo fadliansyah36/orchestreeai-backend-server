@@ -130,6 +130,19 @@ object WorkflowDefinitions {
                 WorkflowNodeDef("chat-n4-validate", "Validate Output Grounding", WorkflowNodeType.PLAN, 3),
                 WorkflowNodeDef("chat-n5-deliver", "Deliver Final Reply", WorkflowNodeType.DELIVER, 4)
             )
+        ),
+        WorkflowDefinition(
+            id = "wf-omnichannel-sales-persona",
+            name = "Omnichannel Sales & Consultative AI Employee Workflow",
+            domain = "salesmarketing",
+            description = "Empathetic Cekat.ai-style customer engagement, consultative qualification, catalog grounding, and commerce actions",
+            nodes = listOf(
+                WorkflowNodeDef("sales-n1-identity", "Resolve Customer Identity", WorkflowNodeType.TOOL_CALL, 0),
+                WorkflowNodeDef("sales-n2-classify", "Classify Sales Intent & Persona", WorkflowNodeType.CLASSIFY, 1),
+                WorkflowNodeDef("sales-n3-grounding", "Catalog Grounding & Stock Check", WorkflowNodeType.TOOL_CALL, 2),
+                WorkflowNodeDef("sales-n4-persona-llm", "Synthesize Empathetic Persona Reply via ModelRouter", WorkflowNodeType.LLM_GENERATE, 3),
+                WorkflowNodeDef("sales-n5-deliver", "Deliver to Omnichannel Customer", WorkflowNodeType.DELIVER, 4)
+            )
         )
     )
 

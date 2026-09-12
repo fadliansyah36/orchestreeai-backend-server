@@ -33,6 +33,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
+import ai.orchestree.backend.sales.SalesPersonaEngine
+import ai.orchestree.backend.sales.SalesPersonaType
+import ai.orchestree.backend.conversation.SalesIntentClassifier
+import ai.orchestree.backend.conversation.SalesIntentCode
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -197,6 +201,86 @@ class OrchestrationEngine(
             NodeExecutionResult(NodeExecutionStatus.SUCCESS, "Output validated: isGrounded=${valid.isGrounded}")
         })
         registerNode(DeliverWorkflowNode("chat-n5-deliver", nextNodeId = null))
+
+        // Omnichannel Sales & Consultative AI Employee Workflow (Cekat.ai Standard)
+        registerNode(GenericStepWorkflowNode("sales-n1-identity", WorkflowNodeType.TOOL_CALL, nextNodeId = "sales-n2-classify") { ctx ->
+            val senderId = ctx["senderId"]?.toString() ?: "customer-anonymous"
+            val channelType = ctx["channelType"]?.toString() ?: "WHATSAPP"
+            ctx["resolvedCustomerId"] = "cust-$senderId"
+            ctx["customerName"] = ctx["customerName"]?.toString() ?: "Pelanggan"
+            NodeExecutionResult(NodeExecutionStatus.SUCCESS, "Resolved customer identity for channel: $channelType", data = mapOf("customerId" to "cust-$senderId"))
+        })
+
+        registerNode(GenericStepWorkflowNode("sales-n2-classify", WorkflowNodeType.CLASSIFY, nextNodeId = "sales-n3-grounding") { ctx ->
+            val prompt = ctx["prompt"]?.toString() ?: ""
+            val classification = SalesIntentClassifier.classify(prompt)
+            ctx["salesIntent"] = classification.intent.name
+            ctx["intentConfidence"] = classification.confidence
+            
+            // Map sales intent to persona type
+            val personaType = when (classification.intent) {
+                SalesIntentCode.SALAM -> SalesPersonaType.RECEPTIONIST
+                SalesIntentCode.TANYA_PRODUK, SalesIntentCode.KONSULTASI -> SalesPersonaType.SALES_CONSULTANT
+                SalesIntentCode.TANYA_HARGA, SalesIntentCode.TANYA_STOK -> SalesPersonaType.PRODUCT_ADVISOR
+                SalesIntentCode.NEGO_DISKON, SalesIntentCode.ORDER_CREATE -> SalesPersonaType.CLOSER
+                SalesIntentCode.ORDER_STATUS -> SalesPersonaType.CUSTOMER_SUCCESS
+                SalesIntentCode.KOMPLAIN_RETUR -> SalesPersonaType.RETENTION_AGENT
+                SalesIntentCode.MINTA_HUMAN -> {
+                    ctx["humanTakeoverRequired"] = true
+                    SalesPersonaType.RECEPTIONIST
+                }
+            }
+            ctx["personaType"] = personaType.name
+            NodeExecutionResult(NodeExecutionStatus.SUCCESS, "Classified sales intent: ${classification.intent.name} -> Persona: ${personaType.name}")
+        })
+
+        registerNode(GenericStepWorkflowNode("sales-n3-grounding", WorkflowNodeType.TOOL_CALL, nextNodeId = "sales-n4-persona-llm") { ctx ->
+            val tenantId = ctx["tenantId"]?.toString() ?: "tenant-default"
+            val personaType = SalesPersonaType.fromString(ctx["personaType"]?.toString() ?: "RECEPTIONIST")
+            val customerName = ctx["customerName"]?.toString() ?: "Pelanggan"
+            val convId = ctx["conversationId"]?.toString() ?: ""
+
+            val systemPrompt = SalesPersonaEngine.buildSystemPrompt(
+                tenantId = tenantId,
+                personaType = personaType,
+                customerName = customerName,
+                conversationId = convId
+            )
+            ctx["systemPrompt"] = systemPrompt
+            NodeExecutionResult(NodeExecutionStatus.SUCCESS, "Constructed Cekat.ai system prompt grounded on official catalog")
+        })
+
+        registerNode(GenericStepWorkflowNode("sales-n4-persona-llm", WorkflowNodeType.LLM_GENERATE, nextNodeId = "sales-n5-deliver") { ctx ->
+            val prompt = ctx["prompt"]?.toString() ?: ""
+            val tenantId = ctx["tenantId"]?.toString() ?: "tenant-default"
+            val systemPrompt = ctx["systemPrompt"]?.toString() ?: ""
+            val humanNeeded = ctx["humanTakeoverRequired"] == true
+
+            if (humanNeeded) {
+                val handoverMsg = "Baik Kak, kami segera sambungkan pesan Kakak ke rekan Customer Care kami. Mohon ditunggu sebentar ya Kak..."
+                ctx["finalOutput"] = handoverMsg
+                NodeExecutionResult(NodeExecutionStatus.SUCCESS, handoverMsg)
+            } else {
+                val fullPrompt = "$systemPrompt\n\nPesan Pelanggan: \"$prompt\"\n\nTanggapan Anda (sebagai AI Employee):"
+                val res = modelRouter.execute(
+                    ModelRouteRequest(
+                        taskCategory = "GENERAL_CHAT",
+                        prompt = fullPrompt,
+                        tenantId = tenantId
+                    )
+                )
+                val replyText = if (res.isSuccess) {
+                    res.getOrThrow().text
+                } else {
+                    "Halo Kak! Terima kasih sudah menghubungi kami. Ada yang bisa kami bantu jelaskan tentang produk kami hari ini?"
+                }
+                ctx["finalOutput"] = replyText
+                ctx["modelUsed"] = res.getOrNull()?.modelUsed ?: "default"
+                NodeExecutionResult(NodeExecutionStatus.SUCCESS, replyText)
+            }
+        })
+
+        registerNode(DeliverWorkflowNode("sales-n5-deliver", nextNodeId = null))
 
         // Universal AI Selection & Ranking 10-node workflow (Bagian E)
         UniversalAiSelectionWorkflowNodes.registerAll(this, modelRouter)

@@ -47,11 +47,11 @@ object MultiChannelAccountEngine {
                 conn.use { c ->
                     c.prepareStatement("""
                         INSERT INTO channel_accounts 
-                        (id, tenant_id, channel_type, account_name, external_identifier, external_identifier_hash, 
+                        (id, tenant_id, channel_type, account_label, external_identifier, external_identifier_hash, 
                          operation_mode, credentials_encrypted, status, created_at, updated_at)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?)
                         ON CONFLICT (id) DO UPDATE SET 
-                            account_name = EXCLUDED.account_name,
+                            account_label = EXCLUDED.account_label,
                             operation_mode = EXCLUDED.operation_mode,
                             updated_at = EXCLUDED.updated_at
                     """.trimIndent()).use { ps ->
@@ -63,8 +63,8 @@ object MultiChannelAccountEngine {
                         ps.setString(6, hash)
                         ps.setString(7, operationMode.name)
                         ps.setString(8, credentialsEncrypted)
-                        ps.setLong(9, now)
-                        ps.setLong(10, now)
+                        ps.setTimestamp(9, java.sql.Timestamp(now))
+                        ps.setTimestamp(10, java.sql.Timestamp(now))
                         ps.executeUpdate()
                     }
                 }
@@ -92,7 +92,7 @@ object MultiChannelAccountEngine {
         try {
             conn.use { c ->
                 c.prepareStatement("""
-                    SELECT id, tenant_id, channel_type, account_name, external_identifier, external_identifier_hash, operation_mode, status, created_at
+                    SELECT id, tenant_id, channel_type, account_label, external_identifier, external_identifier_hash, operation_mode, status, created_at
                     FROM channel_accounts
                     WHERE tenant_id = ? AND (external_identifier = ? OR external_identifier_hash = ?)
                     LIMIT 1
@@ -104,16 +104,17 @@ object MultiChannelAccountEngine {
                         if (rs.next()) {
                             val modeStr = rs.getString("operation_mode") ?: "AI_AUTOPILOT"
                             val mode = try { ChannelOperationMode.valueOf(modeStr) } catch (_: Exception) { ChannelOperationMode.AI_AUTOPILOT }
+                            val createdTs = rs.getTimestamp("created_at")?.time ?: System.currentTimeMillis()
                             return@withContext ChannelAccount(
                                 id = rs.getString("id"),
                                 tenantId = rs.getString("tenant_id"),
                                 channelType = rs.getString("channel_type"),
-                                accountName = rs.getString("account_name"),
+                                accountName = rs.getString("account_label") ?: "Account",
                                 externalIdentifier = rs.getString("external_identifier") ?: externalId,
                                 externalIdentifierHash = rs.getString("external_identifier_hash") ?: hash,
                                 operationMode = mode,
                                 status = rs.getString("status") ?: "ACTIVE",
-                                createdAt = rs.getLong("created_at")
+                                createdAt = createdTs
                             )
                         }
                     }

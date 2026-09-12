@@ -38,6 +38,62 @@ class McpToolRegistry {
                     riskLevel = McpRiskLevel.MEDIUM
                 )
             )
+            registry.register(
+                McpToolDefinition(
+                    name = "product.recommend",
+                    description = "Recommends catalog products tailored to customer profile and category",
+                    inputSchema = """{"type": "object", "properties": {"category": {"type": "string"}}}""",
+                    riskLevel = McpRiskLevel.LOW
+                )
+            )
+            registry.register(
+                McpToolDefinition(
+                    name = "product.search",
+                    description = "Searches official products and inventory status by keyword or SKU",
+                    inputSchema = """{"type": "object", "properties": {"query": {"type": "string"}}}""",
+                    riskLevel = McpRiskLevel.LOW
+                )
+            )
+            registry.register(
+                McpToolDefinition(
+                    name = "cart.create",
+                    description = "Creates shopping cart with items for customer checkout",
+                    inputSchema = """{"type": "object", "properties": {"customer_id": {"type": "string"}, "items": {"type": "string"}}}""",
+                    riskLevel = McpRiskLevel.MEDIUM
+                )
+            )
+            registry.register(
+                McpToolDefinition(
+                    name = "order.create",
+                    description = "Converts shopping cart into formal order with shipping and payment details",
+                    inputSchema = """{"type": "object", "properties": {"cart_id": {"type": "string"}, "customer_name": {"type": "string"}}}""",
+                    riskLevel = McpRiskLevel.HIGH
+                )
+            )
+            registry.register(
+                McpToolDefinition(
+                    name = "invoice.generate",
+                    description = "Retrieves and formats official digital invoice for verified order",
+                    inputSchema = """{"type": "object", "properties": {"order_number": {"type": "string"}}}""",
+                    riskLevel = McpRiskLevel.LOW
+                )
+            )
+            registry.register(
+                McpToolDefinition(
+                    name = "discount.apply",
+                    description = "Evaluates and applies promotional discount within governance thresholds",
+                    inputSchema = """{"type": "object", "properties": {"requested_discount_pct": {"type": "number"}, "order_or_cart_id": {"type": "string"}}}""",
+                    riskLevel = McpRiskLevel.HIGH
+                )
+            )
+            registry.register(
+                McpToolDefinition(
+                    name = "refund.process",
+                    description = "Submits refund request for human manager approval",
+                    inputSchema = """{"type": "object", "properties": {"refund_amount": {"type": "number"}, "order_id": {"type": "string"}}}""",
+                    riskLevel = McpRiskLevel.CRITICAL
+                )
+            )
             return registry
         }
     }

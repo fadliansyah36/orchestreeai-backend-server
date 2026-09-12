@@ -39,37 +39,42 @@ class RealCartCreateTool {
         subtotal = qty * unitPrice
         val taxAmount = subtotal * 0.11 // 11% PPN
         val totalAmount = subtotal + taxAmount
+        val now = System.currentTimeMillis()
 
         val conn = DatabaseManager.getConnection()
         if (conn != null) {
             try {
                 conn.use { c ->
                     c.prepareStatement("""
-                        INSERT INTO carts (id, tenant_id, customer_id, subtotal, tax_amount, total_amount, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO carts (id, tenant_id, customer_id, conversation_id, status, subtotal, discount_amount, tax_amount, shipping_fee, total_amount, currency, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, 'ACTIVE', ?, 0.0, ?, 0.0, ?, 'IDR', ?, ?)
                     """.trimIndent()).use { ps ->
                         ps.setString(1, cartId)
                         ps.setString(2, tenantId)
                         ps.setString(3, customerId)
-                        ps.setDouble(4, subtotal)
-                        ps.setDouble(5, taxAmount)
-                        ps.setDouble(6, totalAmount)
-                        ps.setLong(7, System.currentTimeMillis())
-                        ps.setLong(8, System.currentTimeMillis())
+                        ps.setString(4, convId)
+                        ps.setDouble(5, subtotal)
+                        ps.setDouble(6, taxAmount)
+                        ps.setDouble(7, totalAmount)
+                        ps.setLong(8, now)
+                        ps.setLong(9, now)
                         ps.executeUpdate()
                     }
 
                     c.prepareStatement("""
-                        INSERT INTO cart_items (id, cart_id, tenant_id, product_id, quantity, unit_price, subtotal)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                        INSERT INTO cart_items (id, cart_id, tenant_id, product_id, product_name, unit_price, quantity, subtotal, discount_amount, total_amount, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.0, ?, ?)
                     """.trimIndent()).use { psItem ->
                         psItem.setString(1, "item-" + UUID.randomUUID().toString().take(8))
                         psItem.setString(2, cartId)
                         psItem.setString(3, tenantId)
                         psItem.setString(4, prodId)
-                        psItem.setInt(5, qty)
+                        psItem.setString(5, "Product Item $prodId")
                         psItem.setDouble(6, unitPrice)
-                        psItem.setDouble(7, subtotal)
+                        psItem.setInt(7, qty)
+                        psItem.setDouble(8, subtotal)
+                        psItem.setDouble(9, subtotal)
+                        psItem.setLong(10, now)
                         psItem.executeUpdate()
                     }
                 }
@@ -107,28 +112,49 @@ class RealOrderCreateTool {
         val orderNumber = "ORD-${System.currentTimeMillis() / 1000}-${(1000..9999).random()}"
         val shippingFee = 18000.0
         val paymentUrl = "https://app.sandbox.midtrans.com/snap/v2/vtweb/snap-token-$orderId"
+        val now = System.currentTimeMillis()
 
-        var subtotal = 5000000.0
-        var taxAmount = 550000.0
-        var totalAmount = subtotal + taxAmount + shippingFee
+        var subtotal = 0.0
+        var taxAmount = 0.0
+        var totalAmount = 0.0
 
         val conn = DatabaseManager.getConnection()
         if (conn != null) {
             try {
                 conn.use { c ->
+                    // Try to calculate from existing cart if cartId provided
+                    if (cartId.isNotBlank()) {
+                        c.prepareStatement("SELECT subtotal, tax_amount, total_amount FROM carts WHERE tenant_id = ? AND id = ?").use { psCart ->
+                            psCart.setString(1, tenantId)
+                            psCart.setString(2, cartId)
+                            psCart.executeQuery().use { rs ->
+                                if (rs.next()) {
+                                    subtotal = rs.getDouble("subtotal")
+                                    taxAmount = rs.getDouble("tax_amount")
+                                }
+                            }
+                        }
+                    }
+
+                    if (subtotal <= 0.0) {
+                        subtotal = parameters["subtotal"]?.toDoubleOrNull() ?: 2500000.0
+                        taxAmount = subtotal * 0.11
+                    }
+                    totalAmount = subtotal + taxAmount + shippingFee
+
                     c.prepareStatement("""
                         INSERT INTO orders 
                         (id, tenant_id, customer_id, cart_id, order_number, order_date, customer_name, customer_phone,
                          shipping_address, shipping_city, courier_code, courier_service, shipping_fee, subtotal, 
-                         tax_amount, total_amount, payment_gateway, payment_method, status, payment_url, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         tax_amount, total_amount, currency, payment_gateway, payment_method, status, payment_url, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'IDR', ?, ?, 'PENDING_PAYMENT', ?, ?, ?)
                     """.trimIndent()).use { ps ->
                         ps.setString(1, orderId)
                         ps.setString(2, tenantId)
                         ps.setString(3, customerId)
                         ps.setString(4, cartId)
                         ps.setString(5, orderNumber)
-                        ps.setLong(6, System.currentTimeMillis())
+                        ps.setLong(6, now)
                         ps.setString(7, customerName)
                         ps.setString(8, customerPhone)
                         ps.setString(9, shippingAddress)
@@ -141,11 +167,37 @@ class RealOrderCreateTool {
                         ps.setDouble(16, totalAmount)
                         ps.setString(17, paymentGateway)
                         ps.setString(18, paymentMethod)
-                        ps.setString(19, "PENDING_PAYMENT")
-                        ps.setString(20, paymentUrl)
-                        ps.setLong(21, System.currentTimeMillis())
-                        ps.setLong(22, System.currentTimeMillis())
+                        ps.setString(19, paymentUrl)
+                        ps.setLong(20, now)
+                        ps.setLong(21, now)
                         ps.executeUpdate()
+                    }
+
+                    // Copy items if from cart
+                    if (cartId.isNotBlank()) {
+                        c.prepareStatement("SELECT * FROM cart_items WHERE cart_id = ?").use { psItems ->
+                            psItems.setString(1, cartId)
+                            psItems.executeQuery().use { rsItem ->
+                                while (rsItem.next()) {
+                                    c.prepareStatement("""
+                                        INSERT INTO order_items (id, order_id, tenant_id, product_id, product_name, unit_price, quantity, subtotal, discount_amount, total_amount, created_at)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0.0, ?, ?)
+                                    """.trimIndent()).use { psInsItem ->
+                                        psInsItem.setString(1, "oi-" + UUID.randomUUID().toString().take(8))
+                                        psInsItem.setString(2, orderId)
+                                        psInsItem.setString(3, tenantId)
+                                        psInsItem.setString(4, rsItem.getString("product_id"))
+                                        psInsItem.setString(5, rsItem.getString("product_name") ?: "Product")
+                                        psInsItem.setDouble(6, rsItem.getDouble("unit_price"))
+                                        psInsItem.setInt(7, rsItem.getInt("quantity"))
+                                        psInsItem.setDouble(8, rsItem.getDouble("subtotal"))
+                                        psInsItem.setDouble(9, rsItem.getDouble("total_amount"))
+                                        psInsItem.setLong(10, now)
+                                        psInsItem.executeUpdate()
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -164,42 +216,107 @@ class RealOrderCreateTool {
 }
 
 class RealProductRecommendTool {
+    private val logger = LoggerFactory.getLogger(RealProductRecommendTool::class.java)
+
     suspend fun execute(tenantId: String, parameters: Map<String, String>): String = withContext(Dispatchers.IO) {
         val category = parameters["category"] ?: "ALL"
+        val skus = mutableListOf<String>()
+        val names = mutableListOf<String>()
+
+        val conn = DatabaseManager.getConnection()
+        if (conn != null) {
+            try {
+                conn.use { c ->
+                    val query = if (category.uppercase() == "ALL") {
+                        "SELECT sku, name FROM products WHERE tenant_id = ? AND is_active = true LIMIT 5"
+                    } else {
+                        "SELECT sku, name FROM products WHERE tenant_id = ? AND is_active = true AND category ILIKE ? LIMIT 5"
+                    }
+                    c.prepareStatement(query).use { ps ->
+                        ps.setString(1, tenantId)
+                        if (category.uppercase() != "ALL") ps.setString(2, "%$category%")
+                        ps.executeQuery().use { rs ->
+                            while (rs.next()) {
+                                skus.add(rs.getString("sku") ?: "")
+                                names.add(rs.getString("name") ?: "")
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Error querying products in RealProductRecommendTool: ${e.message}")
+            }
+        }
+
         buildJsonObject {
             put("status", "SUCCESS")
-            put("recommended_skus", "SKU-CHAIR-001,SKU-DESK-002")
-            put("reasoning", "Rekomendasi produk terlaris kategori $category berdasarkan profil pelanggan")
+            put("recommended_skus", if (skus.isNotEmpty()) skus.joinToString(",") else "SKU-ORCH-01,SKU-ORCH-02")
+            put("recommended_products", if (names.isNotEmpty()) names.joinToString(" | ") else "Enterprise Workforce Suite")
+            put("reasoning", "Rekomendasi produk katalog tenant $tenantId kategori $category")
         }.toString()
     }
 }
 
 class RealInvoiceGenerateTool {
+    private val logger = LoggerFactory.getLogger(RealInvoiceGenerateTool::class.java)
+
     suspend fun execute(tenantId: String, parameters: Map<String, String>): String = withContext(Dispatchers.IO) {
-        val orderNumber = parameters["order_number"] ?: "ORD-12345"
-        val orderId = "ord-inv-01"
-        val customerName = "Dewi Lestari"
-        val totalAmount = 3022000.0
-        val paymentStatus = "PAID"
+        val orderIdentifier = parameters["order_number"] ?: parameters["order_id"] ?: ""
+        var foundOrderNumber = orderIdentifier.ifBlank { "ORD-2026-DEFAULT" }
+        var foundOrderId = "ord-unknown"
+        var foundCustomerName = "Pelanggan"
+        var foundTotalAmount = 0.0
+        var foundStatus = "PENDING_PAYMENT"
+        var foundCourier = "JNE"
+
+        val conn = DatabaseManager.getConnection()
+        if (conn != null && orderIdentifier.isNotBlank()) {
+            try {
+                conn.use { c ->
+                    c.prepareStatement("""
+                        SELECT id, order_number, customer_name, total_amount, status, courier_code 
+                        FROM orders 
+                        WHERE tenant_id = ? AND (order_number = ? OR id = ?)
+                        LIMIT 1
+                    """.trimIndent()).use { ps ->
+                        ps.setString(1, tenantId)
+                        ps.setString(2, orderIdentifier)
+                        ps.setString(3, orderIdentifier)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next()) {
+                                foundOrderId = rs.getString("id")
+                                foundOrderNumber = rs.getString("order_number")
+                                foundCustomerName = rs.getString("customer_name") ?: "Pelanggan"
+                                foundTotalAmount = rs.getDouble("total_amount")
+                                foundStatus = rs.getString("status") ?: "PAID"
+                                foundCourier = rs.getString("courier_code") ?: "JNE"
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Error querying order for invoice: ${e.message}")
+            }
+        }
 
         val formattedInvoice = """
             =================================================
             ORCHESTREE AI - OFFICIAL INVOICE
-            Order Number: $orderNumber
-            Customer: $customerName
-            Item: Standing Desk Dual Motor (Walnut Wood 140cm)
-            Status: LUNAS
-            Courier: SICEPAT (BEST)
-            Total: Rp 3.022.000
+            Order Number: $foundOrderNumber
+            Customer: $foundCustomerName
+            Status: $foundStatus
+            Courier: $foundCourier
+            Total: Rp ${"%,.0f".format(foundTotalAmount)}
             =================================================
         """.trimIndent()
 
         buildJsonObject {
             put("status", "SUCCESS")
-            put("order_id", orderId)
-            put("customer_name", customerName)
-            put("total_amount", totalAmount)
-            put("payment_status", paymentStatus)
+            put("order_id", foundOrderId)
+            put("order_number", foundOrderNumber)
+            put("customer_name", foundCustomerName)
+            put("total_amount", foundTotalAmount)
+            put("payment_status", foundStatus)
             put("formatted_invoice", formattedInvoice)
         }.toString()
     }

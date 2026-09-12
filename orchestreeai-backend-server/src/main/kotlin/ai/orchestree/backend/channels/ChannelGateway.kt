@@ -13,6 +13,11 @@ import ai.orchestree.backend.modelrouter.ModelRouteRequest
 import ai.orchestree.backend.modelrouter.ModelRouter
 import ai.orchestree.backend.orchestration.OrchestrationEngine
 import ai.orchestree.backend.resilience.executeWithRetry
+import ai.orchestree.backend.sales.SalesPersonaEngine
+import ai.orchestree.backend.sales.SalesPersonaType
+import ai.orchestree.backend.conversation.SalesIntentClassifier
+import ai.orchestree.backend.conversation.SalesIntentCode
+import ai.orchestree.backend.channels.isolation.AudienceScope
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
 
@@ -40,6 +45,9 @@ class ChannelGateway(
     suspend fun processInbound(message: InboundMessage): OutboundMessage? {
         logger.info("Processing Inbound message from [${message.channelType}] sender: ${message.senderId} (tenant: ${message.tenantId})")
 
+        // Validasi Isolasi Audience Scope (Customer Facing vs Internal Staff)
+        isolationEngine.validateAudienceScope(message.tenantId, message.channelType, message.senderId, AudienceScope.CUSTOMER_FACING)
+
         if (message.channelAccountId != null) {
             val isOwned = isolationEngine.validateTenantOwnership(message.tenantId, message.channelAccountId)
             if (!isOwned) {
@@ -48,8 +56,41 @@ class ChannelGateway(
             }
         }
 
-        // Generate Automated Response via ModelRouter with unified retry resilience and Commercial Credit Lifecycle
-        val prompt = "Anda adalah Asisten AI Bisnis Pelanggan. Balas pesan pelanggan berikut secara ramah, profesional, dan ringkas:\n'${message.text}'"
+        // 1. Klasifikasi Intent Pelanggan (Cekat.ai Sales Intent Classifier)
+        val salesIntent = SalesIntentClassifier.classify(message.text)
+        logger.info("Classified customer sales intent: ${salesIntent.intent.name} (confidence: ${salesIntent.confidence})")
+
+        // 2. Pemilihan AI Employee Persona Berdasarkan Intent
+        val targetPersona = when (salesIntent.intent) {
+            SalesIntentCode.SALAM -> SalesPersonaType.RECEPTIONIST
+            SalesIntentCode.TANYA_PRODUK, SalesIntentCode.KONSULTASI -> SalesPersonaType.SALES_CONSULTANT
+            SalesIntentCode.TANYA_HARGA, SalesIntentCode.TANYA_STOK -> SalesPersonaType.PRODUCT_ADVISOR
+            SalesIntentCode.NEGO_DISKON, SalesIntentCode.ORDER_CREATE -> SalesPersonaType.CLOSER
+            SalesIntentCode.ORDER_STATUS -> SalesPersonaType.CUSTOMER_SUCCESS
+            SalesIntentCode.KOMPLAIN_RETUR -> SalesPersonaType.RETENTION_AGENT
+            SalesIntentCode.MINTA_HUMAN -> null // Eskalasi ke Staf Manusia
+        }
+
+        if (targetPersona == null) {
+            // Pelanggan minta admin manusia
+            val handoverText = "Halo Kak! Baik, pesan Kakak sudah kami tandai untuk ditangani langsung oleh staf Customer Care kami. Rekan kami akan segera merespons obrolan ini ya Kak."
+            return OutboundMessage(
+                tenantId = message.tenantId,
+                channelType = message.channelType,
+                recipientId = message.senderId,
+                text = handoverText
+            )
+        }
+
+        // 3. Grounding Katalog & Pembentukan Prompt Konsultatif Cekat.ai
+        val systemPrompt = SalesPersonaEngine.buildSystemPrompt(
+            tenantId = message.tenantId,
+            personaType = targetPersona,
+            customerName = "Kakak",
+            conversationId = message.channelAccountId ?: ""
+        )
+
+        val prompt = "$systemPrompt\n\nPesan Pelanggan: \"${message.text}\"\nTanggapan AI Employee:"
         val activeProvider = ai.orchestree.backend.database.repositories.modelrouter.ProviderRegistryRepository.instance
             .getLlmProvidersOrderedByFallbackPriority().firstOrNull()?.providerCode?.lowercase() ?: "nvidia_nim"
         val defaultActiveModel = ai.orchestree.backend.database.repositories.modelrouter.LlmProviderModelRepository.instance

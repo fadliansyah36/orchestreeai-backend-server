@@ -46,10 +46,18 @@ class McpToolExecutor(
                 backoffMultiplier = 2.0
             ) {
                 val duration = System.currentTimeMillis() - startTime
+                val strParams = params.mapValues { it.value.toString() }
                 val output = when (toolName) {
                     "crm_fetch_lead" -> """{"leadId": "${params["leadId"] ?: "L-101"}", "status": "QUALIFIED", "score": 88}"""
                     "db_query_revenue" -> """{"totalRevenueIdr": 125000000, "growthPercent": 14.5}"""
                     "telegram_send_broadcast" -> """{"delivered": true, "recipientCount": 42}"""
+                    "product.recommend" -> ai.orchestree.backend.sales.RealProductRecommendTool().execute(tenantId, strParams)
+                    "product.search" -> ai.orchestree.backend.sales.RealProductRecommendTool().execute(tenantId, strParams)
+                    "cart.create" -> ai.orchestree.backend.sales.RealCartCreateTool().execute(tenantId, strParams)
+                    "order.create" -> ai.orchestree.backend.sales.RealOrderCreateTool().execute(tenantId, strParams)
+                    "invoice.generate" -> ai.orchestree.backend.sales.RealInvoiceGenerateTool().execute(tenantId, strParams)
+                    "discount.apply" -> ai.orchestree.backend.sales.RealDiscountApplyTool().execute(tenantId, strParams)
+                    "refund.process" -> ai.orchestree.backend.sales.RealRefundProcessTool().execute(tenantId, strParams)
                     else -> """{"result": "SUCCESS", "tool": "$toolName"}"""
                 }
 
