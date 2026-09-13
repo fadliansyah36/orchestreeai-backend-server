@@ -59,6 +59,9 @@ data class Task(
     val teamId: String? = null,
     val boardId: String? = "default",
     val aiJobTitleId: String? = null,
+    val createdByAiAgentId: String? = null,
+    val detectionReason: String? = null,
+    val recommendedQuantity: Double? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 

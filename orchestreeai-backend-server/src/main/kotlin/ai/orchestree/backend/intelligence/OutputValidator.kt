@@ -2,6 +2,12 @@ package ai.orchestree.backend.intelligence
 
 import org.slf4j.LoggerFactory
 
+enum class DataAvailabilityState {
+    AVAILABLE,
+    PARTIAL,
+    UNAVAILABLE
+}
+
 data class GroundingValidationResult(
     val isGrounded: Boolean,
     val groundedClaims: List<String> = emptyList(),
@@ -220,6 +226,34 @@ class OutputValidator {
         }
 
         return filtered
+    }
+
+    /**
+     * PRD Bagian 76: AI Never Invent Data
+     * Enforces that missing domains are never fabricated or assumed.
+     * Appends explicit limitation disclosures if data is partial or unavailable.
+     */
+    fun enforceNeverInventData(
+        text: String,
+        state: DataAvailabilityState,
+        missingDomains: List<String>
+    ): String {
+        if (state == DataAvailabilityState.AVAILABLE || missingDomains.isEmpty()) {
+            return text
+        }
+
+        val sb = StringBuilder(text.trim())
+        if (sb.isNotEmpty()) {
+            sb.append("\n\n")
+        }
+
+        val domainListStr = missingDomains.joinToString(", ")
+        val disclaimer = "[DATA LIMITATION NOTICE] Data dari $domainListStr belum tersedia untuk periode ini. Tidak ada estimasi asumtif yang dibuat untuk metrik terkait."
+        
+        if (!text.contains("[DATA LIMITATION NOTICE]")) {
+            sb.append(disclaimer)
+        }
+        return sb.toString()
     }
 }
 

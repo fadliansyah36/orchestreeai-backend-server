@@ -14,6 +14,26 @@ data class OutcomeClassificationResult(
 )
 
 @Serializable
+data class ActionOutcomeRecord(
+    val tenantId: String,
+    val agentId: String,
+    val agentName: String,
+    val nodeId: String,
+    val executionId: String,
+    val workflowId: String,
+    val scenarioContext: String,
+    val actionType: String,
+    val predictedImpact: String,
+    val actualOutcome: String,
+    val outcomeSource: String, // PAYMENT_WEBHOOK, HUMAN_EXPLICIT_REJECT, MONITORING_LOOP_RESULT, SOP_PRECHECK_BLOCKED, INTEGRATION_FABRIC_RESULT, SOURCE_SYSTEM_VERIFICATION
+    val isSuccess: Boolean,
+    val verifiedBy: String? = null,
+    val sopBreached: Boolean = false,
+    val safetyViolation: Boolean = false,
+    val metricImpactJson: String = "{}"
+)
+
+@Serializable
 data class NodeOutcomeRequest(
     val tenantId: String,
     val agentId: String,
@@ -27,7 +47,10 @@ data class NodeOutcomeRequest(
     val actualOutcome: String,
     val outcomeSource: String, // PAYMENT_WEBHOOK, HUMAN_EXPLICIT_REJECT, MONITORING_LOOP_RESULT, SOP_PRECHECK_BLOCKED
     val isSuccess: Boolean,
-    val verifiedBy: String? = null
+    val verifiedBy: String? = null,
+    val sopBreached: Boolean = false,
+    val safetyViolation: Boolean = false,
+    val metricImpactJson: String = "{}"
 )
 
 @Serializable
@@ -46,39 +69,113 @@ data class LessonLearned(
 
 object ContinuousLearningCore {
     private val logger = LoggerFactory.getLogger(ContinuousLearningCore::class.java)
+    private val inMemorySkillScores = java.util.concurrent.ConcurrentHashMap<String, AgentSkillStats>()
+    private val inMemoryOutcomes = java.util.concurrent.CopyOnWriteArrayList<ActionOutcomeRecord>()
 
-    fun classifyOutcome(outcomeSource: String, isSuccess: Boolean, details: String = ""): OutcomeClassificationResult {
+    /**
+     * PRD Bagian 74.4: Anti-Reinforcement-of-Bad-Pattern Guardrail
+     * If an outcome breached SOP, violated safety, or was explicitly rejected by human / system,
+     * the system MUST NEVER reinforce the pattern, even if short-term operational metrics look positive.
+     */
+    fun classifyOutcomeWithGuardrail(
+        outcomeSource: String,
+        isSuccess: Boolean,
+        sopBreached: Boolean = false,
+        safetyViolation: Boolean = false,
+        details: String = ""
+    ): OutcomeClassificationResult {
+        // Strict Guardrail Enforcement
+        if (safetyViolation) {
+            logger.warn("[ANTI_REINFORCE_GUARDRAIL] Safety violation detected! Classifying as LEARN_FROM_REJECTION with heavy penalty.")
+            return OutcomeClassificationResult(classification = "LEARN_FROM_REJECTION", confidenceDelta = -8.0)
+        }
+        if (sopBreached) {
+            logger.warn("[ANTI_REINFORCE_GUARDRAIL] SOP breach detected! Classification blocked from REINFORCE. Penalty applied.")
+            return OutcomeClassificationResult(classification = "LEARN_FROM_REJECTION", confidenceDelta = -5.0)
+        }
+        if (outcomeSource == "HUMAN_EXPLICIT_REJECT") {
+            return OutcomeClassificationResult(classification = "LEARN_FROM_REJECTION", confidenceDelta = -5.0)
+        }
+        if (outcomeSource == "SOP_PRECHECK_BLOCKED") {
+            return OutcomeClassificationResult(classification = "LEARN_FROM_REJECTION", confidenceDelta = -4.0)
+        }
+        if (outcomeSource == "MONITORING_LOOP_RESULT" && !isSuccess) {
+            return OutcomeClassificationResult(classification = "CORRECT", confidenceDelta = -3.5)
+        }
+        if (!isSuccess) {
+            return OutcomeClassificationResult(classification = "CORRECT", confidenceDelta = -2.0)
+        }
+
+        // Positive reinforcement only when fully successful without breaches
         return when {
-            outcomeSource == "PAYMENT_WEBHOOK" && isSuccess -> {
-                OutcomeClassificationResult(classification = "REINFORCE", confidenceDelta = 2.5)
-            }
-            outcomeSource == "HUMAN_EXPLICIT_REJECT" -> {
-                OutcomeClassificationResult(classification = "LEARN_FROM_REJECTION", confidenceDelta = -5.0)
-            }
-            outcomeSource == "MONITORING_LOOP_RESULT" && !isSuccess -> {
-                OutcomeClassificationResult(classification = "CORRECT", confidenceDelta = -3.5)
-            }
-            outcomeSource == "SOP_PRECHECK_BLOCKED" -> {
-                OutcomeClassificationResult(classification = "LEARN_FROM_REJECTION", confidenceDelta = -4.0)
-            }
-            isSuccess -> {
-                OutcomeClassificationResult(classification = "REINFORCE", confidenceDelta = 1.0)
-            }
-            else -> {
-                OutcomeClassificationResult(classification = "CORRECT", confidenceDelta = -2.0)
-            }
+            outcomeSource == "PAYMENT_WEBHOOK" -> OutcomeClassificationResult(classification = "REINFORCE", confidenceDelta = 2.5)
+            outcomeSource == "SOURCE_SYSTEM_VERIFICATION" -> OutcomeClassificationResult(classification = "REINFORCE", confidenceDelta = 2.0)
+            else -> OutcomeClassificationResult(classification = "REINFORCE", confidenceDelta = 1.0)
         }
     }
 
-    suspend fun onNodeOutcomeAvailable(request: NodeOutcomeRequest) = withContext(Dispatchers.IO) {
-        val classification = classifyOutcome(request.outcomeSource, request.isSuccess, request.actualOutcome)
-        val now = System.currentTimeMillis()
-        val conn = DatabaseManager.getConnection()
+    fun classifyOutcome(outcomeSource: String, isSuccess: Boolean, details: String = ""): OutcomeClassificationResult {
+        return classifyOutcomeWithGuardrail(outcomeSource, isSuccess, false, false, details)
+    }
 
+    /**
+     * PRD Bagian 74.3: Eight-Stage Closed-Loop Learning recordOutcome
+     */
+    suspend fun recordOutcome(record: ActionOutcomeRecord): OutcomeClassificationResult = withContext(Dispatchers.IO) {
+        // Stage 4: Outcome Classification with Anti-Reinforcement Guardrail
+        val classification = classifyOutcomeWithGuardrail(
+            outcomeSource = record.outcomeSource,
+            isSuccess = record.isSuccess,
+            sopBreached = record.sopBreached,
+            safetyViolation = record.safetyViolation,
+            details = record.actualOutcome
+        )
+
+        val now = System.currentTimeMillis()
+        inMemoryOutcomes.add(record)
+
+        // Stage 5: Confidence Score Calibration (decay + impact weighting)
+        val key = "${record.tenantId}:${record.agentId}"
+        val existingStats = inMemorySkillScores[key] ?: AgentSkillStats(
+            agentId = record.agentId,
+            skillConfidenceScore = 85.0,
+            reinforceCount = 0,
+            correctCount = 0,
+            rejectionCount = 0,
+            sampleSize = 0,
+            growthTrend = "+0.0% MoM"
+        )
+
+        val newSampleSize = existingStats.sampleSize + 1
+        var newReinforce = existingStats.reinforceCount
+        var newCorrect = existingStats.correctCount
+        var newRejection = existingStats.rejectionCount
+
+        when (classification.classification) {
+            "REINFORCE" -> newReinforce += 1
+            "CORRECT" -> newCorrect += 1
+            "LEARN_FROM_REJECTION" -> newRejection += 1
+        }
+
+        val calibratedScore = (existingStats.skillConfidenceScore + classification.confidenceDelta).coerceIn(10.0, 100.0)
+        val roundedScore = (calibratedScore * 10).toInt() / 10.0
+        val trend = if (newReinforce >= newCorrect) "+${String.format(java.util.Locale.US, "%.1f", (newReinforce.toDouble() / newSampleSize) * 5.0)}% MoM" else "-1.5% MoM"
+
+        inMemorySkillScores[key] = AgentSkillStats(
+            agentId = record.agentId,
+            skillConfidenceScore = roundedScore,
+            reinforceCount = newReinforce,
+            correctCount = newCorrect,
+            rejectionCount = newRejection,
+            sampleSize = newSampleSize,
+            growthTrend = trend
+        )
+
+        // Stage 1 & 2: Record to DB if available
+        val conn = DatabaseManager.getConnection()
         if (conn != null) {
             try {
                 conn.use { c ->
-                    // 1. Insert into agent_decision_outcomes
                     c.prepareStatement("""
                         INSERT INTO agent_decision_outcomes 
                         (id, tenant_id, agent_id, agent_name, node_id, execution_id, workflow_id, scenario_context, 
@@ -87,61 +184,25 @@ object ContinuousLearningCore {
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """.trimIndent()).use { ps ->
                         ps.setString(1, "out-" + UUID.randomUUID().toString().take(8))
-                        ps.setString(2, request.tenantId)
-                        ps.setString(3, request.agentId)
-                        ps.setString(4, request.agentId)
-                        ps.setString(5, request.nodeId)
-                        ps.setString(6, request.executionId)
-                        ps.setString(7, request.workflowId)
-                        ps.setString(8, request.scenarioContext)
-                        ps.setString(9, request.actionType)
-                        ps.setString(10, request.predictedImpact)
-                        ps.setString(11, request.actualOutcome)
-                        ps.setString(12, request.outcomeSource)
+                        ps.setString(2, record.tenantId)
+                        ps.setString(3, record.agentId)
+                        ps.setString(4, record.agentName)
+                        ps.setString(5, record.nodeId)
+                        ps.setString(6, record.executionId)
+                        ps.setString(7, record.workflowId)
+                        ps.setString(8, record.scenarioContext)
+                        ps.setString(9, record.actionType)
+                        ps.setString(10, record.predictedImpact)
+                        ps.setString(11, record.actualOutcome)
+                        ps.setString(12, record.outcomeSource)
                         ps.setString(13, classification.classification)
-                        ps.setString(14, request.verifiedBy ?: "SYSTEM_AUTOMATED")
+                        ps.setString(14, record.verifiedBy ?: "SYSTEM_AUTOMATED")
                         ps.setDouble(15, classification.confidenceDelta)
-                        ps.setString(16, "{}")
+                        ps.setString(16, record.metricImpactJson)
                         ps.setLong(17, now)
-                        ps.setDouble(18, 0.85)
+                        ps.setDouble(18, roundedScore / 100.0)
                         ps.executeUpdate()
                     }
-
-                    // 2. Update or insert agent_skill_confidence
-                    var currentScore = 80.0
-                    var sampleSize = 0
-                    var reinforceCount = 0
-                    var correctCount = 0
-                    var rejectionCount = 0
-
-                    c.prepareStatement("""
-                        SELECT current_confidence_score, sample_size, reinforce_count, correct_count, rejection_count
-                        FROM agent_skill_confidence 
-                        WHERE tenant_id = ? AND agent_id = ? AND skill_id = ?
-                    """.trimIndent()).use { psSel ->
-                        psSel.setString(1, request.tenantId)
-                        psSel.setString(2, request.agentId)
-                        psSel.setString(3, request.actionType)
-                        psSel.executeQuery().use { rs ->
-                            if (rs.next()) {
-                                currentScore = rs.getDouble("current_confidence_score")
-                                sampleSize = rs.getInt("sample_size")
-                                reinforceCount = rs.getInt("reinforce_count")
-                                correctCount = rs.getInt("correct_count")
-                                rejectionCount = rs.getInt("rejection_count")
-                            }
-                        }
-                    }
-
-                    sampleSize += 1
-                    when (classification.classification) {
-                        "REINFORCE" -> reinforceCount += 1
-                        "CORRECT" -> correctCount += 1
-                        "LEARN_FROM_REJECTION" -> rejectionCount += 1
-                    }
-
-                    // Calculate new score with floor 10.0 and ceiling 100.0
-                    currentScore = (currentScore + classification.confidenceDelta).coerceIn(10.0, 100.0)
 
                     c.prepareStatement("""
                         INSERT INTO agent_skill_confidence 
@@ -156,22 +217,22 @@ object ContinuousLearningCore {
                             rejection_count = EXCLUDED.rejection_count,
                             last_evaluated_at = EXCLUDED.last_evaluated_at
                     """.trimIndent()).use { psUp ->
-                        psUp.setString(1, "conf-${request.agentId}-${request.actionType}")
-                        psUp.setString(2, request.tenantId)
-                        psUp.setString(3, request.agentId)
-                        psUp.setString(4, request.actionType)
-                        psUp.setString(5, request.actionType.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() })
-                        psUp.setDouble(6, currentScore)
-                        psUp.setInt(7, sampleSize)
-                        psUp.setInt(8, reinforceCount)
-                        psUp.setInt(9, correctCount)
-                        psUp.setInt(10, rejectionCount)
+                        psUp.setString(1, "conf-${record.agentId}-${record.actionType}")
+                        psUp.setString(2, record.tenantId)
+                        psUp.setString(3, record.agentId)
+                        psUp.setString(4, record.actionType)
+                        psUp.setString(5, record.actionType.replace("_", " ").lowercase().replaceFirstChar { it.uppercase() })
+                        psUp.setDouble(6, roundedScore)
+                        psUp.setInt(7, newSampleSize)
+                        psUp.setInt(8, newReinforce)
+                        psUp.setInt(9, newCorrect)
+                        psUp.setInt(10, newRejection)
                         psUp.setLong(11, now)
                         psUp.executeUpdate()
                     }
 
-                    // 3. Check sample size threshold for Distillation (>= 5 failures -> generate lesson learned)
-                    if (rejectionCount >= 5) {
+                    // Stage 6: Distillation to Policy Candidate if repeated failures occur
+                    if (newRejection >= 3) {
                         c.prepareStatement("""
                             INSERT INTO agent_lessons_learned 
                             (id, tenant_id, agent_id, skill_id, status, sample_count, root_cause_analysis, 
@@ -179,13 +240,13 @@ object ContinuousLearningCore {
                             VALUES (?, ?, ?, ?, 'ACTIVE', ?, ?, ?, ?)
                             ON CONFLICT (id) DO NOTHING
                         """.trimIndent()).use { psLes ->
-                            psLes.setString(1, "les-${request.agentId}-${request.actionType}")
-                            psLes.setString(2, request.tenantId)
-                            psLes.setString(3, request.agentId)
-                            psLes.setString(4, request.actionType)
-                            psLes.setInt(5, rejectionCount)
-                            psLes.setString(6, "Pola deviasi berulang terdeteksi pada $rejectionCount kasus: ${request.actualOutcome}")
-                            psLes.setString(7, "Batas autonomous threshold diperketat untuk aksi ${request.actionType}. Seluruh request diskon atau deviasi wajib eskalasi.")
+                            psLes.setString(1, "les-${record.agentId}-${record.actionType}")
+                            psLes.setString(2, record.tenantId)
+                            psLes.setString(3, record.agentId)
+                            psLes.setString(4, record.actionType)
+                            psLes.setInt(5, newRejection)
+                            psLes.setString(6, "Anti-reinforcement active: $newRejection rejections/breaches detected on ${record.actionType}")
+                            psLes.setString(7, "Strict human approval mandatory for ${record.actionType}. Automatic threshold tightened.")
                             psLes.setLong(8, now)
                             psLes.executeUpdate()
                         }
@@ -195,6 +256,30 @@ object ContinuousLearningCore {
                 logger.warn("Could not record continuous learning outcome in DB: ${e.message}")
             }
         }
+
+        classification
+    }
+
+    suspend fun onNodeOutcomeAvailable(request: NodeOutcomeRequest) = withContext(Dispatchers.IO) {
+        val record = ActionOutcomeRecord(
+            tenantId = request.tenantId,
+            agentId = request.agentId,
+            agentName = request.agentName,
+            nodeId = request.nodeId,
+            executionId = request.executionId,
+            workflowId = request.workflowId,
+            scenarioContext = request.scenarioContext,
+            actionType = request.actionType,
+            predictedImpact = request.predictedImpact,
+            actualOutcome = request.actualOutcome,
+            outcomeSource = request.outcomeSource,
+            isSuccess = request.isSuccess,
+            verifiedBy = request.verifiedBy,
+            sopBreached = request.sopBreached,
+            safetyViolation = request.safetyViolation,
+            metricImpactJson = request.metricImpactJson
+        )
+        recordOutcome(record)
     }
 
     suspend fun invalidateLesson(tenantId: String, lessonId: String, adminUserId: String): Boolean = withContext(Dispatchers.IO) {
@@ -294,6 +379,13 @@ object ContinuousLearningCore {
                 }
             } catch (e: Exception) {
                 logger.warn("Error querying agent_skill_confidences: ${e.message}")
+            }
+        }
+
+        if (!foundInDb) {
+            val inMem = inMemorySkillScores["$tenantId:$agentId"]
+            if (inMem != null) {
+                return@withContext inMem
             }
         }
 

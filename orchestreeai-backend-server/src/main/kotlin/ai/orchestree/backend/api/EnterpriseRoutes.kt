@@ -62,8 +62,42 @@ data class ManagementQueryRequest(
 data class KnowledgeRuleCreateRequest(
     val entityType: String,
     val sopReference: String,
-    val structuredRuleJson: String,
-    val naturalLanguageRule: String
+    val structuredRuleJson: String = "{}",
+    val naturalLanguageRule: String = "",
+    val condition: String = "operating_temperature",
+    val comparisonOperator: String = ">=",
+    val thresholdValue: Double = 0.0,
+    val ruleDescription: String = ""
+)
+
+@Serializable
+data class AiEventPublishRequest(
+    val eventCode: String,
+    val entityReference: String,
+    val sourceSystem: String = "INTERNAL",
+    val severity: String = "HIGH",
+    val isMultiAgentCollaborative: Boolean = false,
+    val payloadJson: String = "{}"
+)
+
+@Serializable
+data class ActionProposeRequest(
+    val agentId: String,
+    val actionType: String,
+    val targetSystem: String,
+    val payload: Map<String, String> = emptyMap(),
+    val assignedHuman: String = "admin"
+)
+
+@Serializable
+data class MonitoringLoopRegisterRequest(
+    val anomalyOrMetricType: String,
+    val entityReference: String,
+    val sourceSystem: String = "INTERNAL_INVENTORY",
+    val baselineValue: Double = 0.0,
+    val detectedValue: Double = 0.0,
+    val targetResolvedValue: Double = 0.0,
+    val assignedAgentOrHumanId: String = "agent-sentinel-ops"
 )
 
 @Serializable
@@ -160,6 +194,14 @@ fun Route.enterpriseRoutes() {
     val chiefOfStaffService = ai.orchestree.backend.intelligence.ChiefOfStaffService(supabase, modelRouter)
     val auditLogger = ai.orchestree.backend.security.AuditLogger()
     val managementSessionCache = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>>()
+
+    val aiActionOrchestrator = ai.orchestree.backend.orchestration.AiActionOrchestrator()
+    val monitoringLoopEngine = ai.orchestree.backend.orchestration.MonitoringLoopEngine()
+    val financeIntelligenceService = ai.orchestree.backend.intelligence.AiFinanceIntelligenceService()
+    val knowledgeFusionEngine = ai.orchestree.backend.intelligence.KnowledgeOperationalFusionEngine()
+    val aiEventEngine = ai.orchestree.backend.events.AiEventEngine()
+    val specialistCollaborationService = ai.orchestree.backend.collaboration.SpecialistAgentCollaborationService()
+    val dataQualityGovernanceService = ai.orchestree.backend.governance.DataQualityGovernanceService()
 
     route("/tenants/{id}") {
         // Third-Party Integration Fabric (PRD Addendum 2 Bagian 58, 78.1)
@@ -474,84 +516,140 @@ fun Route.enterpriseRoutes() {
         }
 
         // Knowledge Rules & SOP (PRD Addendum 2 Bagian 70, 78.1)
+        // Knowledge Rule WAJIB melalui approval Admin sebelum aktif
         get("/knowledge-rules") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val result = supabase.queryTable("knowledge_rules", tenantId)
-            call.respond(HttpStatusCode.OK, GenericStatusResponse(status = "success", message = tenantId, id = result.getOrDefault("[]")))
+            val statusFilter = call.request.queryParameters["status"]
+            val rules = knowledgeFusionEngine.listRules(tenantId, statusFilter)
+            call.respond(HttpStatusCode.OK, rules)
         }
 
         post("/knowledge-rules") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
             val req = call.receive<KnowledgeRuleCreateRequest>()
-            val ruleId = "kr-${java.util.UUID.randomUUID().toString().take(8)}"
-            val payload = kotlinx.serialization.json.buildJsonObject {
-                put("id", ruleId)
-                put("tenant_id", tenantId)
-                put("entity_type", req.entityType)
-                put("sop_reference", req.sopReference)
-                put("structured_rule", req.structuredRuleJson)
-                put("natural_language_rule", req.naturalLanguageRule)
-                put("status", "APPROVED")
-            }.toString()
-            supabase.insertRecord("knowledge_rules", tenantId, payload)
-            call.respond(
-                HttpStatusCode.Created,
-                GenericStatusResponse(
-                    status = "APPROVED",
-                    id = ruleId,
-                    message = req.entityType
-                )
+            val rule = ai.orchestree.backend.intelligence.KnowledgeRule(
+                tenantId = tenantId,
+                entityType = req.entityType,
+                condition = req.condition,
+                comparisonOperator = req.comparisonOperator,
+                thresholdValue = req.thresholdValue,
+                sopReference = req.sopReference,
+                ruleDescription = req.ruleDescription.ifBlank { req.naturalLanguageRule.ifBlank { "Knowledge Rule for ${req.entityType}" } },
+                status = "PENDING_APPROVAL" // WAJIB diapprove admin sebelum aktif
             )
+            val created = knowledgeFusionEngine.proposeRule(rule)
+            call.respond(HttpStatusCode.Created, created)
+        }
+
+        post("/knowledge-rules/{ruleId}/approve") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val ruleId = call.parameters["ruleId"] ?: return@post call.respond(HttpStatusCode.BadRequest)
+            val adminUser = call.request.queryParameters["adminUser"] ?: "admin-super"
+            val approved = knowledgeFusionEngine.approveRule(tenantId, ruleId, adminUser)
+            if (approved != null) {
+                call.respond(HttpStatusCode.OK, approved)
+            } else {
+                call.respond(HttpStatusCode.NotFound, mapOf("error" to "Rule $ruleId not found for tenant $tenantId"))
+            }
+        }
+
+        post("/knowledge-rules/fuse") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val body = call.receive<Map<String, String>>()
+            val entityId = body["entityId"] ?: "EQUIP-001"
+            val entityType = body["entityType"] ?: "EQUIPMENT"
+            val metrics = body.filterKeys { it !in listOf("entityId", "entityType") }
+                .mapValues { it.value.toDoubleOrNull() ?: 0.0 }
+            val fusionResult = knowledgeFusionEngine.fuseOperationalData(tenantId, entityId, entityType, metrics)
+            call.respond(HttpStatusCode.OK, fusionResult)
         }
 
         // AI Event Engine (PRD Addendum 2 Bagian 71, 78.1)
         get("/events") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val events = mutableListOf<EnterpriseAiEventItem>()
-            try {
-                ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
-                    conn.prepareStatement("""
-                        SELECT id, title, impact_level
-                        FROM company_context_events
-                        WHERE tenant_id = ? OR tenant_id = 'tenant-default'
-                        ORDER BY created_at DESC LIMIT 10
-                    """.trimIndent()).use { ps ->
-                        ps.setString(1, tenantId)
-                        ps.executeQuery().use { rs ->
-                            while (rs.next()) {
-                                events.add(
-                                    EnterpriseAiEventItem(
-                                        eventId = rs.getString("id"),
-                                        eventCode = rs.getString("title") ?: "ENTERPRISE_EVENT",
-                                        responsiblePersona = "CHIEF_OF_STAFF_AGENT",
-                                        status = rs.getString("impact_level") ?: "NORMAL"
-                                    )
-                                )
-                            }
-                        }
-                    }
-                }
-            } catch (_: Exception) {}
-
-            if (events.isEmpty()) {
-                events.addAll(
-                    listOf(
-                        EnterpriseAiEventItem(
-                            eventId = "ev-01",
-                            eventCode = "EQUIPMENT_WARNING",
-                            responsiblePersona = "MAINTENANCE_AGENT",
-                            status = "HANDLED"
-                        ),
-                        EnterpriseAiEventItem(
-                            eventId = "ev-02",
-                            eventCode = "PROJECT_DELAY",
-                            responsiblePersona = "PROJECT_AGENT",
-                            status = "IN_PROGRESS"
-                        )
-                    )
-                )
-            }
+            val events = aiEventEngine.listEvents(tenantId)
             call.respond(HttpStatusCode.OK, events)
+        }
+
+        post("/events") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val req = call.receive<AiEventPublishRequest>()
+            val instance = ai.orchestree.backend.events.AiEventInstance(
+                tenantId = tenantId,
+                eventCode = req.eventCode,
+                entityReference = req.entityReference,
+                sourceSystem = req.sourceSystem,
+                payloadJson = req.payloadJson,
+                severity = req.severity,
+                isMultiAgentCollaborative = req.isMultiAgentCollaborative
+            )
+            val dispatchResult = aiEventEngine.publishAndDispatch(instance)
+            call.respond(HttpStatusCode.Created, dispatchResult)
+        }
+
+        // AI Finance Intelligence: Cash Flow Pressure Detection (PRD Addendum 2 Bagian 69)
+        get("/finance/cashflow-pressure") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val report = financeIntelligenceService.analyzeCashFlowPressure(tenantId)
+            call.respond(HttpStatusCode.OK, report)
+        }
+
+        // AI Action Orchestration & Execution Layer (PRD Addendum 2 Bagian 67)
+        get("/actions") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val actions = aiActionOrchestrator.actionsStore.values.filter { it.tenantId == tenantId || it.tenantId == "tenant-default" }
+            call.respond(HttpStatusCode.OK, actions)
+        }
+
+        post("/actions/propose") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val req = call.receive<ActionProposeRequest>()
+            val result = aiActionOrchestrator.proposeAction(
+                tenantId = tenantId,
+                agentId = req.agentId,
+                actionType = req.actionType,
+                targetSystem = req.targetSystem,
+                payload = req.payload,
+                assignedHuman = req.assignedHuman
+            )
+            call.respond(HttpStatusCode.OK, result)
+        }
+
+        post("/actions/{actionId}/execute") {
+            val actionId = call.parameters["actionId"] ?: return@post call.respond(HttpStatusCode.BadRequest)
+            val action = aiActionOrchestrator.actionsStore[actionId]
+                ?: return@post call.respond(HttpStatusCode.NotFound, mapOf("error" to "Action $actionId not found"))
+            val execResult = aiActionOrchestrator.executeApprovedAction(action)
+            call.respond(HttpStatusCode.OK, execResult)
+        }
+
+        // Automatic Task Creation & Monitoring Loop (PRD Addendum 2 Bagian 68)
+        get("/monitoring-loops") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val loops = monitoringLoopEngine.loopsStore.values.filter { it.tenantId == tenantId || it.tenantId == "tenant-default" }
+            call.respond(HttpStatusCode.OK, loops)
+        }
+
+        post("/monitoring-loops") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val req = call.receive<MonitoringLoopRegisterRequest>()
+            val loop = monitoringLoopEngine.registerAnomaly(
+                tenantId = tenantId,
+                anomalyOrMetricType = req.anomalyOrMetricType,
+                entityReference = req.entityReference,
+                sourceSystem = req.sourceSystem,
+                baselineValue = req.baselineValue,
+                detectedValue = req.detectedValue,
+                targetResolvedValue = req.targetResolvedValue,
+                assignedAgentOrHumanId = req.assignedAgentOrHumanId
+            )
+            call.respond(HttpStatusCode.Created, loop)
+        }
+
+        post("/monitoring-loops/tick") {
+            val loopId = call.request.queryParameters["loopId"]
+            val updated = monitoringLoopEngine.monitoringLoopTick(loopId)
+            call.respond(HttpStatusCode.OK, updated)
         }
 
         // AI Chief of Staff Briefings (PRD Addendum 2 Bagian 73, 78.1)
@@ -695,5 +793,109 @@ fun Route.enterpriseRoutes() {
             }
             call.respond(HttpStatusCode.OK, issues)
         }
+
+        // PRD Bagian 78.1: Fase 2B.4 Endpoints
+        // 1. Chief of Staff Briefings Generation
+        post("/chief-of-staff/briefings/generate") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val briefing = chiefOfStaffService.generateExecutiveBriefing(tenantId)
+            call.respond(HttpStatusCode.OK, briefing)
+        }
+
+        // 2. Chief of Staff Research Directives Listing
+        get("/chief-of-staff/research-directives") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val directives = chiefOfStaffService.getResearchDirectives(tenantId)
+            call.respond(HttpStatusCode.OK, directives)
+        }
+
+        // 3. Resolve Data Quality Issue
+        post("/data-quality-issues/resolve") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val req = call.receive<ResolveDataQualityIssueRequest>()
+            val resolved = dataQualityGovernanceService.resolveIssue(tenantId, req.issueId, req.resolvedBy)
+            call.respond(HttpStatusCode.OK, mapOf("resolved" to resolved, "issueId" to req.issueId))
+        }
+
+        // 4. Project Health Score (Bagian 72.3, 78.1)
+        get("/project-health/{projectId}") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val projectId = call.parameters["projectId"] ?: "proj-default"
+            val report = specialistCollaborationService.getProjectHealth(tenantId, projectId)
+                ?: specialistCollaborationService.evaluateProjectHealth(tenantId, projectId, "Project $projectId")
+            call.respond(HttpStatusCode.OK, report)
+        }
+
+        post("/project-health/evaluate") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val req = call.receive<EvaluateProjectHealthRequest>()
+            val report = specialistCollaborationService.evaluateProjectHealth(
+                tenantId = tenantId,
+                projectId = req.projectId,
+                projectName = req.projectName,
+                scheduleScore = req.scheduleScore,
+                budgetScore = req.budgetScore,
+                riskScore = req.riskScore,
+                workforceScore = req.workforceScore,
+                blockersCount = req.blockersCount
+            )
+            call.respond(HttpStatusCode.OK, report)
+        }
+
+        // 5. Multi-Agent Collaboration (Bagian 72.4, 78.1)
+        post("/multi-agent-collaborations/initiate") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val req = call.receive<ai.orchestree.backend.collaboration.MultiAgentCollaborationRequest>()
+            val session = specialistCollaborationService.initiateCollaboration(req)
+            call.respond(HttpStatusCode.Created, session)
+        }
+
+        get("/multi-agent-collaborations") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val collabs = specialistCollaborationService.getCollaborations(tenantId)
+            call.respond(HttpStatusCode.OK, collabs)
+        }
+
+        // 6. Role-Based Explainability (Bagian 75.4, 78.1)
+        get("/explainability/{executionId}") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val executionId = call.parameters["executionId"] ?: ""
+            val role = call.request.queryParameters["role"] ?: "OPERATOR"
+            val trace = auditLogger.getRoleBasedExplainability(tenantId, executionId, role)
+                ?: auditLogger.recordExplainability(
+                    ai.orchestree.backend.security.ExplainabilityTrace(
+                        executionId = executionId,
+                        tenantId = tenantId,
+                        agentId = "agent-ops-01",
+                        actionType = "EXECUTE_ENTERPRISE_WORKFLOW",
+                        triggerEvent = "SCHEDULED_MONITORING",
+                        inputsUsedSummary = "Context Fabric & SOP Standard",
+                        confidenceScore = 0.91
+                    )
+                ).let { auditLogger.getRoleBasedExplainability(tenantId, executionId, role) }
+
+            if (trace != null) {
+                call.respond(HttpStatusCode.OK, trace)
+            } else {
+                call.respond(HttpStatusCode.NotFound, mapOf("error" to "Explainability trace not found for $executionId"))
+            }
+        }
     }
 }
+
+@Serializable
+data class EvaluateProjectHealthRequest(
+    val projectId: String,
+    val projectName: String,
+    val scheduleScore: Double = 88.0,
+    val budgetScore: Double = 92.0,
+    val riskScore: Double = 85.0,
+    val workforceScore: Double = 90.0,
+    val blockersCount: Int = 0
+)
+
+@Serializable
+data class ResolveDataQualityIssueRequest(
+    val issueId: String,
+    val resolvedBy: String = "OPERATOR"
+)

@@ -18,6 +18,7 @@ import ai.orchestree.backend.scheduler.jobs.ScheduledSelectionAnalysisJob
 import ai.orchestree.backend.scheduler.jobs.SyncNvidiaNimCatalogJob
 import ai.orchestree.backend.scheduler.jobs.TrialExpiryJob
 import ai.orchestree.backend.scheduler.jobs.CreditExpirationJob
+import ai.orchestree.backend.scheduler.jobs.MonitoringLoopJob
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -54,6 +55,7 @@ class SchedulerEngine(
     val creditExpirationJob: CreditExpirationJob = CreditExpirationJob(),
     val syncNvidiaNimCatalogJob: SyncNvidiaNimCatalogJob = SyncNvidiaNimCatalogJob(),
     val schedulerJobQueueRepo: SchedulerJobQueueRepository = SchedulerJobQueueRepository(),
+    val monitoringLoopJob: MonitoringLoopJob = MonitoringLoopJob(),
     private val tenantRepo: ai.orchestree.backend.database.repositories.identity.TenantRepository = ai.orchestree.backend.database.repositories.identity.TenantRepository.instance
 ) {
     private val logger = LoggerFactory.getLogger(SchedulerEngine::class.java)
@@ -239,6 +241,16 @@ class SchedulerEngine(
                     competitorCrawlJob.execute("tenant-default", "https://example.com")
                 }
                 delay(60_000 * 60 * 6) // 6 hours
+            }
+        }
+
+        // 10. Automatic Task Creation & Monitoring Loop (Fase 2B.3 Bagian 68, runs every 5 minutes)
+        activeJobs["MONITORING_LOOP"] = scope.launch {
+            while (isActive) {
+                executeWithDlq(jobType = "MONITORING_LOOP", tenantId = null, payload = emptyMap()) {
+                    monitoringLoopJob.execute()
+                }
+                delay(60_000 * 5) // 5 minutes
             }
         }
     }
