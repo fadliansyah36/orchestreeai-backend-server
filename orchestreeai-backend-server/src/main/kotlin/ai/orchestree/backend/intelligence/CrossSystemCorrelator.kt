@@ -40,7 +40,9 @@ class CrossSystemCorrelator(
     ): CrossSystemCorrelationResult = withContext(Dispatchers.IO) {
         logger.info("[CORRELATOR] Correlating cross-system signals for tenant $tenantId on entity $entityReference")
         
-        // Query company_activity_stream dari Supabase
+        // 1. Query company_activity_stream dari Supabase
+        val streamItems = mutableListOf<Pair<String, String>>()
+
         val streamResult = supabase.queryTable(
             tableName = "company_activity_stream",
             tenantId = tenantId,
@@ -50,26 +52,66 @@ class CrossSystemCorrelator(
             )
         )
 
-        val streamItems: List<Pair<String, String>> = if (streamResult.isSuccess) {
+        if (streamResult.isSuccess) {
             val raw = streamResult.getOrDefault("[]")
             if (raw.isNotBlank() && raw != "[]") {
                 try {
                     val parsed = Json.parseToJsonElement(raw)
                     if (parsed is JsonArray) {
-                        parsed.mapNotNull { elem ->
-                            val obj = elem as? JsonObject ?: return@mapNotNull null
-                            val id = obj["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                            val sysType = obj["system_type"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                            id to sysType
+                        parsed.forEach { elem ->
+                            val obj = elem as? JsonObject ?: return@forEach
+                            val id = obj["id"]?.jsonPrimitive?.content ?: return@forEach
+                            val sysType = obj["system_type"]?.jsonPrimitive?.content ?: return@forEach
+                            streamItems.add(id to sysType)
                         }
-                    } else emptyList()
+                    }
                 } catch (e: Exception) {
-                    logger.warn("[CORRELATOR] Failed parsing company_activity_stream: ${e.message}")
-                    emptyList()
+                    logger.warn("[CORRELATOR] Failed parsing company_activity_stream from Supabase: ${e.message}")
                 }
-            } else emptyList()
-        } else {
-            emptyList()
+            }
+        }
+
+        // 2. Fallback / supplementary check to PostgreSQL DatabaseManager & CompanyActivityStreamService
+        if (streamItems.size < 2) {
+            try {
+                ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                    conn.prepareStatement("""
+                        SELECT id, system_type, summary
+                        FROM company_activity_stream
+                        WHERE (tenant_id = ? OR tenant_id = 'tenant-default')
+                          AND (entity_reference ILIKE ? OR summary ILIKE ?)
+                          AND event_timestamp >= NOW() - (? || ' hours')::INTERVAL
+                        ORDER BY event_timestamp DESC LIMIT 20
+                    """.trimIndent()).use { ps ->
+                        ps.setString(1, tenantId)
+                        ps.setString(2, "%$entityReference%")
+                        ps.setString(3, "%$entityReference%")
+                        ps.setInt(4, timeWindowHours)
+                        ps.executeQuery().use { rs ->
+                            while (rs.next()) {
+                                val id = rs.getString("id")
+                                val sysType = rs.getString("system_type") ?: "ERP"
+                                if (streamItems.none { it.first == id }) {
+                                    streamItems.add(id to sysType)
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                logger.debug("[CORRELATOR] DB fallback query check: ${e.message}")
+            }
+        }
+
+        // 3. Fallback to in-memory activity stream
+        if (streamItems.size < 2) {
+            val memoryStream = ai.orchestree.backend.enterprise.CompanyActivityStreamService.getStream(tenantId)
+            val matchingMemory = memoryStream.filter { it.summaryText.contains(entityReference, ignoreCase = true) }
+            for (m in matchingMemory) {
+                if (streamItems.none { it.first == m.id }) {
+                    streamItems.add(m.id to m.sourceSystem)
+                }
+            }
         }
 
         val distinctSystems = streamItems.map { it.second }.distinct()

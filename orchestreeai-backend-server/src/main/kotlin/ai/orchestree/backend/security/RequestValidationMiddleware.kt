@@ -153,19 +153,46 @@ fun Application.configureRequestValidation() {
 
         exception<Throwable> { call, cause ->
             logger.error("Unhandled exception processing request ${call.request.local.uri}: ${cause.message}", cause)
-            val statusCode = when (cause) {
-                is IllegalArgumentException -> HttpStatusCode.BadRequest
-                is NoSuchElementException -> HttpStatusCode.NotFound
-                else -> HttpStatusCode.InternalServerError
-            }
-            call.respond(
-                statusCode,
-                mapOf(
-                    "status" to "error",
-                    "error" to (cause.message ?: "Internal Server Error"),
-                    "type" to (cause::class.simpleName ?: "Exception")
+            if (cause is ai.orchestree.backend.enterprise.CapabilityNotAvailableException) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    mapOf(
+                        "status" to "error",
+                        "error" to "CAPABILITY_NOT_AVAILABLE",
+                        "exception" to "CapabilityNotAvailableException",
+                        "capabilityKey" to cause.capabilityKey,
+                        "requiredTier" to cause.requiredTier,
+                        "tenantId" to cause.tenantId,
+                        "message" to (cause.message ?: "Capability not available")
+                    )
                 )
-            )
+            } else if (cause is ai.orchestree.backend.enterprise.AiDataPermissionException) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    mapOf(
+                        "status" to "error",
+                        "error" to cause.decision,
+                        "exception" to "AiDataPermissionException",
+                        "decision" to cause.decision,
+                        "reason" to cause.reason,
+                        "message" to (cause.message ?: "AI Data Permission Denied")
+                    )
+                )
+            } else {
+                val statusCode = when (cause) {
+                    is IllegalArgumentException -> HttpStatusCode.BadRequest
+                    is NoSuchElementException -> HttpStatusCode.NotFound
+                    else -> HttpStatusCode.InternalServerError
+                }
+                call.respond(
+                    statusCode,
+                    mapOf(
+                        "status" to "error",
+                        "error" to (cause.message ?: "Internal Server Error"),
+                        "type" to (cause::class.simpleName ?: "Exception")
+                    )
+                )
+            }
         }
     }
 }

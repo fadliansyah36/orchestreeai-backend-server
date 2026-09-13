@@ -94,6 +94,24 @@ class McpToolRegistry {
                     riskLevel = McpRiskLevel.CRITICAL
                 )
             )
+            registry.register(
+                McpToolDefinition(
+                    name = "enterprise_fetch_record",
+                    description = "Fetches ingested enterprise record from third-party system (requires integration_fabric)",
+                    inputSchema = """{"type": "object", "properties": {"connectionId": {"type": "string"}, "recordType": {"type": "string"}, "recordId": {"type": "string"}}}""",
+                    riskLevel = McpRiskLevel.MEDIUM,
+                    requiredCapability = "integration_fabric"
+                )
+            )
+            registry.register(
+                McpToolDefinition(
+                    name = "enterprise_sync_data",
+                    description = "Triggers external enterprise data synchronization job (requires integration_fabric)",
+                    inputSchema = """{"type": "object", "properties": {"connectionId": {"type": "string"}}}""",
+                    riskLevel = McpRiskLevel.HIGH,
+                    requiredCapability = "integration_fabric"
+                )
+            )
 
             try {
                 ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->

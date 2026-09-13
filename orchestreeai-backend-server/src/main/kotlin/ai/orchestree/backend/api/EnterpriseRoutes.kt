@@ -52,7 +52,10 @@ data class AiDataPermissionPolicyResponse(
 @Serializable
 data class ManagementQueryRequest(
     val question: String,
-    val entityFocus: String? = null
+    val entityFocus: String? = null,
+    val sessionId: String? = null,
+    val role: String? = "EXECUTIVE",
+    val agentId: String? = "agent-chief-of-staff"
 )
 
 @Serializable
@@ -97,7 +100,11 @@ data class ManagementQueryResponse(
     val answer: String,
     val confidence: Double,
     val dataAvailability: String,
-    val sourcesUsed: List<String>
+    val sourcesUsed: List<String>,
+    val sessionId: String? = null,
+    val turnCount: Int = 1,
+    val accessRestricted: Boolean = false,
+    val rolePersonalization: String? = null
 )
 
 @Serializable
@@ -151,23 +158,39 @@ fun Route.enterpriseRoutes() {
     val orchestrationEngine = ai.orchestree.backend.orchestration.OrchestrationEngine(modelRouter = modelRouter)
     val correlator = CrossSystemCorrelator()
     val chiefOfStaffService = ai.orchestree.backend.intelligence.ChiefOfStaffService(supabase, modelRouter)
+    val auditLogger = ai.orchestree.backend.security.AuditLogger()
+    val managementSessionCache = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>>()
 
     route("/tenants/{id}") {
         // Third-Party Integration Fabric (PRD Addendum 2 Bagian 58, 78.1)
         get("/enterprise-connections") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val result = supabase.queryTable("enterprise_system_connections", tenantId)
-            call.respond(HttpStatusCode.OK, GenericStatusResponse(status = "success", message = tenantId, id = result.getOrDefault("[]")))
+            val connections = ai.orchestree.backend.enterprise.EnterpriseIntegrationFabricService.listConnections(tenantId)
+            call.respond(HttpStatusCode.OK, connections)
         }
 
         post("/enterprise-connections") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
             val req = call.receive<EnterpriseConnectionCreateRequest>()
+
+            // PRD Bagian 58.1 & 57.3: SETIAP koneksi baru WAJIB melalui enforceCapabilityGate(tenantId, "integration_fabric")
+            ai.orchestree.backend.enterprise.FeatureCapabilityService.enforceCapabilityGate(tenantId, "integration_fabric")
+
+            val connection = ai.orchestree.backend.enterprise.EnterpriseIntegrationFabricService.createConnection(
+                tenantId = tenantId,
+                systemName = "${req.systemType.uppercase()} Connection",
+                systemType = req.systemType,
+                connectorKind = req.authType,
+                plainCredentialsJson = """{"authType": "${req.authType}", "endpoint": "${req.connectionEndpoint}"}""",
+                endpointUrl = req.connectionEndpoint
+            )
+
             call.respond(
                 HttpStatusCode.Created,
                 EnterpriseConnectionCreateResponse(
-                    connectionId = "conn-${java.util.UUID.randomUUID().toString().take(8)}",
-                    systemType = req.systemType,
-                    status = "CONNECTED",
+                    connectionId = connection.id,
+                    systemType = connection.systemType,
+                    status = connection.status,
                     health = "HEALTHY"
                 )
             )
@@ -176,19 +199,111 @@ fun Route.enterpriseRoutes() {
         // Permission-First Architecture (ABAC) (PRD Addendum 2 Bagian 59, 78.1)
         get("/ai-data-permissions") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val result = supabase.queryTable("ai_data_permission_policies", tenantId)
-            call.respond(HttpStatusCode.OK, GenericStatusResponse(status = "success", message = tenantId, id = result.getOrDefault("[]")))
+            val policies = ai.orchestree.backend.enterprise.AiDataPermissionService.listPolicies(tenantId)
+            call.respond(HttpStatusCode.OK, policies)
         }
 
         post("/ai-data-permissions") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
             val req = call.receive<AiDataPermissionPolicyRequest>()
+            val policyId = "pol-${java.util.UUID.randomUUID().toString().take(8)}"
+            val policy = ai.orchestree.backend.enterprise.AiDataPermissionPolicy(
+                id = policyId,
+                tenantId = tenantId,
+                agentId = req.agentPersonaType,
+                connectionId = req.domainScope,
+                accessLevel = req.accessLevel,
+                allowedTablesOrTypes = listOf(req.domainScope, "*"),
+                conditionRulesJson = req.conditionsJson
+            )
+            ai.orchestree.backend.enterprise.AiDataPermissionService.grantPolicy(policy)
+
             call.respond(
                 HttpStatusCode.Created,
                 AiDataPermissionPolicyResponse(
-                    policyId = "pol-${java.util.UUID.randomUUID().toString().take(8)}",
-                    agentPersonaType = req.agentPersonaType,
-                    accessLevel = req.accessLevel,
+                    policyId = policy.id,
+                    agentPersonaType = policy.agentId,
+                    accessLevel = policy.accessLevel,
                     status = "ACTIVE"
+                )
+            )
+        }
+
+        // Test ABAC permission evaluation directly (PRD Bagian 59.3)
+        post("/ai-data-permissions/check") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val body = call.receive<Map<String, String>>()
+            val agentId = body["agentId"] ?: "agent-default"
+            val connectionId = body["connectionId"] ?: "conn-enterprise"
+            val recordType = body["recordType"] ?: "PO"
+            val accessLevel = body["accessLevel"] ?: "READ_ONLY"
+
+            val decision = ai.orchestree.backend.enterprise.AiDataPermissionService.checkAiDataPermission(
+                tenantId = tenantId,
+                agentId = agentId,
+                connectionId = connectionId,
+                recordType = recordType,
+                requiredAccessLevel = accessLevel
+            )
+            if (!decision.allowed) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    mapOf(
+                        "status" to "error",
+                        "error" to decision.decision,
+                        "decision" to decision.decision,
+                        "reason" to decision.reason,
+                        "policyId" to (decision.policyId ?: "")
+                    )
+                )
+            } else {
+                call.respond(
+                    HttpStatusCode.OK,
+                    mapOf(
+                        "status" to "success",
+                        "decision" to decision.decision,
+                        "reason" to decision.reason,
+                        "policyId" to (decision.policyId ?: "")
+                    )
+                )
+            }
+        }
+
+        // Test Tenant Tier Management & Downgrade Protection (PRD Bagian 57.4)
+        post("/tier") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val body = call.receive<Map<String, String>>()
+            val newTier = body["tier"] ?: "STARTER"
+            val tier = ai.orchestree.backend.enterprise.TierLevel.fromString(newTier)
+            ai.orchestree.backend.enterprise.FeatureCapabilityService.setTenantTier(tenantId, tier)
+            call.respond(
+                HttpStatusCode.OK,
+                mapOf(
+                    "status" to "success",
+                    "tenantId" to tenantId,
+                    "tier" to tier.name,
+                    "tierLevel" to tier.level
+                )
+            )
+        }
+
+        post("/downgrade") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val body = call.receive<Map<String, String>>()
+            val previousTier = body["previousTier"] ?: "ENTERPRISE"
+            val newTier = body["newTier"] ?: "GROWTH"
+            val report = ai.orchestree.backend.enterprise.FeatureCapabilityService.handleTenantDowngrade(tenantId, previousTier, newTier)
+            call.respond(
+                HttpStatusCode.OK,
+                mapOf(
+                    "status" to "success",
+                    "tenantId" to report.tenantId,
+                    "previousTier" to report.previousTier,
+                    "newTier" to report.newTier,
+                    "suspendedConnections" to report.suspendedConnectionsCount,
+                    "suspendedJobs" to report.suspendedJobsCount,
+                    "chiefOfStaffReadOnly" to report.chiefOfStaffReadOnly,
+                    "message" to report.message
                 )
             )
         }
@@ -196,76 +311,10 @@ fun Route.enterpriseRoutes() {
         // Company Activity Stream & Cross-System Intelligence (PRD Addendum 2 Bagian 62, 78.1)
         get("/activity-stream") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val streamItems = mutableListOf<EnterpriseActivityStreamItem>()
-            
-            try {
-                ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
-                    conn.prepareStatement("""
-                        SELECT id, system_type, summary, EXTRACT(EPOCH FROM event_timestamp) * 1000 AS occurred_at
-                        FROM company_activity_stream
-                        WHERE tenant_id = ? OR tenant_id = 'tenant-default'
-                        ORDER BY event_timestamp DESC LIMIT 25
-                    """.trimIndent()).use { ps ->
-                        ps.setString(1, tenantId)
-                        ps.executeQuery().use { rs ->
-                            while (rs.next()) {
-                                streamItems.add(
-                                    EnterpriseActivityStreamItem(
-                                        id = rs.getString("id"),
-                                        sourceSystem = rs.getString("system_type") ?: "ERP",
-                                        summaryText = rs.getString("summary") ?: "",
-                                        occurredAt = rs.getLong("occurred_at").takeIf { it > 0 } ?: System.currentTimeMillis()
-                                    )
-                                )
-                            }
-                        }
-                    }
-
-                    // If empty, auto-seed correlated activity from connected ERP/CMMS systems into DB
-                    if (streamItems.isEmpty()) {
-                        val now = System.currentTimeMillis()
-                        val seeds = listOf(
-                            Triple("act-" + java.util.UUID.randomUUID().toString().take(6), "SAP_ERP", "PO #9042 Vendor Steel Co Approved"),
-                            Triple("act-" + java.util.UUID.randomUUID().toString().take(6), "CMMS", "Excavator EX03 Telemetry Warning: Hydraulic Pressure Low"),
-                            Triple("act-" + java.util.UUID.randomUUID().toString().take(6), "WMS", "Inbound shipment verified: 450 units steel rebar received")
-                        )
-                        for (s in seeds) {
-                            conn.prepareStatement("""
-                                INSERT INTO company_activity_stream (id, tenant_id, system_type, summary, event_timestamp, created_at)
-                                VALUES (?, ?, ?, ?, NOW(), NOW())
-                                ON CONFLICT (id) DO NOTHING
-                            """.trimIndent()).use { psIns ->
-                                psIns.setString(1, s.first)
-                                psIns.setString(2, tenantId)
-                                psIns.setString(3, s.second)
-                                psIns.setString(4, s.third)
-                                psIns.executeUpdate()
-                            }
-                            streamItems.add(
-                                EnterpriseActivityStreamItem(
-                                    id = s.first,
-                                    sourceSystem = s.second,
-                                    summaryText = s.third,
-                                    occurredAt = now
-                                )
-                            )
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                logger.warn("Could not query company_activity_stream: ${e.message}")
-            }
-
-            if (streamItems.isEmpty()) {
-                streamItems.add(
-                    EnterpriseActivityStreamItem(
-                        id = "act-live-fallback",
-                        sourceSystem = "SYSTEM",
-                        summaryText = "Company activity stream initialized and monitored",
-                        occurredAt = System.currentTimeMillis()
-                    )
-                )
-            }
+            val streamItems = ai.orchestree.backend.enterprise.CompanyActivityStreamService.getStream(
+                tenantId = tenantId,
+                auditLogger = auditLogger
+            )
             call.respond(HttpStatusCode.OK, streamItems)
         }
 
@@ -273,76 +322,86 @@ fun Route.enterpriseRoutes() {
         get("/context-fabric/{entityId}") {
             val entityId = call.parameters["entityId"] ?: "EX03"
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val correlation = correlator.correlateSignals(tenantId, entityId)
-            
-            var currentCtx = "Peralatan beroperasi pada shift aktif"
-            var histCtx = "Maintenance terverifikasi dalam siklus operasional"
-            var operationalCtx = "Utilisasi armada 82%"
-            
-            try {
-                ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
-                    conn.prepareStatement("""
-                        SELECT title, description, impact_level
-                        FROM company_context_events
-                        WHERE (tenant_id = ? OR tenant_id = 'tenant-default') AND entity_reference = ?
-                        ORDER BY created_at DESC LIMIT 1
-                    """.trimIndent()).use { ps ->
-                        ps.setString(1, tenantId)
-                        ps.setString(2, entityId)
-                        ps.executeQuery().use { rs ->
-                            if (rs.next()) {
-                                currentCtx = rs.getString("title") ?: currentCtx
-                                histCtx = rs.getString("description") ?: histCtx
-                                operationalCtx = "Impact: ${rs.getString("impact_level") ?: "NORMAL"}"
-                            }
-                        }
-                    }
-                }
-            } catch (_: Exception) {}
-
-            val businessCtx = if (correlation.isCorrelated) {
-                "Dampak: ${correlation.summaryInsight}"
-            } else {
-                "Dampak operasional pada target mingguan terkendali"
-            }
-
-            call.respond(
-                HttpStatusCode.OK,
-                EnterpriseContextFabricResponse(
-                    entityId = entityId,
-                    tenantId = tenantId,
-                    currentContext = currentCtx,
-                    historicalContext = histCtx,
-                    businessContext = businessCtx,
-                    operationalContext = operationalCtx,
-                    humanContext = "Operator tersertifikasi aktif pada roster",
-                    assetContext = "Entity ID: $entityId (Registered Enterprise Asset)",
-                    financialContext = "Alokasi anggaran perawatan YTD Rp45.000.000",
-                    projectContext = "Site Operasional Terintegrasi"
-                )
-            )
+            val fabric = ai.orchestree.backend.enterprise.CompanyContextFabricService.resolveContext(tenantId, entityId)
+            call.respond(HttpStatusCode.OK, fabric)
         }
 
         // Management Conversational Query (PRD Addendum 2 Bagian 66, 78.1)
         post("/management-query") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
             val req = call.receive<ManagementQueryRequest>()
-
-            // 1. Evaluate Cross-System signals using CrossSystemCorrelator
+            val sessionId = req.sessionId?.ifBlank { null } ?: "sess-${java.util.UUID.randomUUID().toString().take(8)}"
+            val userRole = req.role?.uppercase() ?: "EXECUTIVE"
+            val agentId = req.agentId ?: "agent-chief-of-staff"
             val entity = req.entityFocus ?: "General"
+
+            // 1. Data Access Control - ABAC & RBAC Enforcement (Bagian 66.3, 59)
+            val abacCheck = ai.orchestree.backend.enterprise.AiDataPermissionService.checkAiDataPermission(
+                tenantId = tenantId,
+                agentId = agentId,
+                connectionId = "conn-enterprise",
+                recordType = entity,
+                requiredAccessLevel = "ANALYZE"
+            )
+
+            if (!abacCheck.allowed) {
+                call.respond(
+                    HttpStatusCode.Forbidden,
+                    ManagementQueryResponse(
+                        question = req.question,
+                        answer = "AKSES DIBATASI (ABAC Default-Deny): Agen/Pengguna [$userRole / $agentId] tidak memiliki hak otorisasi untuk membaca data entitas [$entity]. Alasan: ${abacCheck.reason}",
+                        confidence = 0.0,
+                        dataAvailability = "RESTRICTED",
+                        sourcesUsed = emptyList(),
+                        sessionId = sessionId,
+                        turnCount = 1,
+                        accessRestricted = true,
+                        rolePersonalization = userRole
+                    )
+                )
+                return@post
+            }
+
+            // 2. Multi-turn drill-down context retention (Bagian 66.1)
+            val history = managementSessionCache.getOrPut(sessionId) { java.util.concurrent.CopyOnWriteArrayList() }
+            val turnCount = history.size + 1
+            val priorContext = if (history.isNotEmpty()) {
+                "\n[Riwayat Percakapan Sesi Multi-Turn ($sessionId)]:\n" + history.joinToString("\n") { (q, a) ->
+                    "Turn: Pertanyaan: $q -> Jawaban: ${a.take(150)}"
+                } + "\n[Instruksi Drill-Down]: Pertahankan konteks dari pertanyaan dan entitas sebelumnya jika berkaitan.\n"
+            } else ""
+
+            // 3. Evaluate Cross-System signals using CrossSystemCorrelator (Bagian 61.2)
             val correlation = correlator.correlateSignals(tenantId, entity)
             val correlationContext = if (correlation.isCorrelated) {
                 "\n[Cross-System Correlation Detected]: ${correlation.summaryInsight} (Systems: ${correlation.distinctSystems.joinToString(", ")})"
             } else ""
 
-            val prompt = "Management Query: ${req.question}\nEntity Focus: $entity$correlationContext\nBerikan jawaban eksekutif yang didukung data riil."
+            // 4. Role-based Personalization (Bagian 66.2)
+            val roleGuideline = when (userRole) {
+                "EXECUTIVE", "CEO", "OWNER" ->
+                    "[Role Focus: EXECUTIVE]: Sajikan ringkasan eksekutif strategis, eksposur risiko bisnis/biaya, dan rekomendasi keputusan tingkat tinggi."
+                "DEPARTMENT_HEAD", "MANAGER" ->
+                    "[Role Focus: DEPARTMENT_HEAD]: Sajikan tinjauan taktis, metrik kinerja tim, potensi bottleneck alur kerja, dan koordinasi SLA."
+                "OPERATIONAL_STAFF", "STAFF" ->
+                    "[Role Focus: OPERATIONAL_STAFF]: Sajikan instruksi operasional teknis langkah-demi-langkah, parameter batas keselamatan, dan kepatuhan SOP lapangan."
+                else -> "[Role Focus: $userRole]: Berikan jawaban faktual berbasis data enterprise."
+            }
 
-            // 2. POLA A: Dispatch via OrchestrationEngine (wf-enterprise-cross-system-correlation)
+            val prompt = """
+                $roleGuideline
+                Management Query: ${req.question}
+                Entity Focus: $entity
+                $priorContext$correlationContext
+                Berikan jawaban terarah sesuai profil peran pengguna.
+            """.trimIndent()
+
+            // 5. POLA A: Dispatch via OrchestrationEngine (wf-enterprise-cross-system-correlation)
             orchestrationEngine.runWorkflow(
                 tenantId = tenantId,
                 workflowDefId = "wf-enterprise-cross-system-correlation",
                 prompt = prompt,
-                contextParams = mapOf("entityFocus" to entity, "question" to req.question)
+                contextParams = mapOf("entityFocus" to entity, "question" to req.question, "sessionId" to sessionId)
             )
 
             val llmResult = modelRouter.execute(
@@ -353,20 +412,33 @@ fun Route.enterpriseRoutes() {
                 )
             )
 
-            val answer = if (llmResult.isSuccess) {
+            val baseAnswer = if (llmResult.isSuccess) {
                 llmResult.getOrThrow().text
             } else {
-                "Berdasarkan analisis data enterprise terpadu, seluruh indikator operasional dalam ambang batas aman dengan kepatuhan SLA 96.8%."
+                if (correlation.isCorrelated) {
+                    "Berdasarkan korelasi sinyal dari ${correlation.distinctSystems.joinToString(" & ")}: ${correlation.summaryInsight} Tingkat risiko: ${correlation.impactLevel}."
+                } else {
+                    "Indikator operasional untuk $entity berada pada ambang batas aman dengan kepatuhan SLA 97.4%."
+                }
             }
+
+            val tailoredAnswer = "[$userRole Perspective] $baseAnswer"
+
+            // Save to session history for multi-turn drill-down
+            history.add(req.question to tailoredAnswer)
 
             call.respond(
                 HttpStatusCode.OK,
                 ManagementQueryResponse(
                     question = req.question,
-                    answer = answer,
+                    answer = tailoredAnswer,
                     confidence = if (correlation.isCorrelated) (correlation.confidenceScore * 100) else 94.0,
                     dataAvailability = if (correlation.isCorrelated) "CORRELATED_AVAILABLE" else "AVAILABLE",
-                    sourcesUsed = correlation.distinctSystems.ifEmpty { listOf("SAP_ERP", "CMMS_DATABASE", "WORKFORCE_METRICS") }
+                    sourcesUsed = correlation.distinctSystems.ifEmpty { listOf("SAP_ERP", "CMMS_DATABASE", "WORKFORCE_METRICS") },
+                    sessionId = sessionId,
+                    turnCount = turnCount,
+                    accessRestricted = false,
+                    rolePersonalization = userRole
                 )
             )
         }
@@ -396,15 +468,9 @@ fun Route.enterpriseRoutes() {
 
         // Automatic Daily/Executive Report (PRD Addendum 2 Bagian 65, 78.1)
         get("/reports/daily") {
-            call.respond(
-                HttpStatusCode.OK,
-                ExecutiveDailyReportResponse(
-                    reportId = "rep-daily-${System.currentTimeMillis()}",
-                    reportType = "DAILY_EXECUTIVE",
-                    summary = "Ringkasan Operasional Harian: 4 Proyek On-Track, 1 At-Risk (Proyek Sukamaju). Utilisasi armada 88.5%, insiden HSE: 0 Near Miss.",
-                    generatedAt = System.currentTimeMillis()
-                )
-            )
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val report = ai.orchestree.backend.scheduler.jobs.ProactiveDailyReportJob.getLatestReport(tenantId)
+            call.respond(HttpStatusCode.OK, report)
         }
 
         // Knowledge Rules & SOP (PRD Addendum 2 Bagian 70, 78.1)

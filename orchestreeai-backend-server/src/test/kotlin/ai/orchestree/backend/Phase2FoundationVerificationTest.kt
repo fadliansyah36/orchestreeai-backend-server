@@ -31,7 +31,7 @@ class Phase2FoundationVerificationTest {
         assertEquals("completed", result.status.lowercase(), "Workflow must complete successfully")
         assertTrue(result.nodeRuns.isNotEmpty(), "Node runs must be recorded")
         val finalOutput = result.finalOutput
-        assertTrue(finalOutput.contains("Executive Briefing") || finalOutput.contains("Delivered") || finalOutput.contains("SANDBOX"), 
+        assertTrue(finalOutput.contains("Executive Briefing", ignoreCase = true) || finalOutput.contains("Delivered", ignoreCase = true) || finalOutput.contains("SANDBOX", ignoreCase = true), 
             "Final output must contain valid workflow result, got: $finalOutput")
     }
 

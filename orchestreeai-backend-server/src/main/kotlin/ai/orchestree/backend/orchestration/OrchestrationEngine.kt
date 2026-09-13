@@ -604,10 +604,42 @@ class OrchestrationEngine(
 
             logger.info("Executing workflow ${execution.id} starting at node: $currentNodeId (lastCompleted: ${execution.lastCompletedNodeId})")
 
+            // PRD Addendum 2 Bagian 57.3: Capability Gating for Enterprise Workflows
+            val workflowDef = workflowRegistry.get(execution.workflowDefId)
+            val requiredCap = when {
+                execution.workflowDefId.contains("chief-of-staff", ignoreCase = true) || execution.workflowDefId.contains("proactive-briefing", ignoreCase = true) -> "ai_chief_of_staff"
+                execution.workflowDefId.contains("cross-system", ignoreCase = true) -> "cross_system_intelligence"
+                execution.workflowDefId.contains("heavy-industry", ignoreCase = true) -> "specialist_agents_heavy_industry"
+                workflowDef?.requiresEnterpriseTier == true -> "cross_system_intelligence"
+                else -> null
+            }
+            if (requiredCap != null) {
+                ai.orchestree.backend.enterprise.FeatureCapabilityService.enforceCapabilityGate(execution.tenantId, requiredCap)
+                if (requiredCap == "ai_chief_of_staff" && !ai.orchestree.backend.enterprise.FeatureCapabilityService.isChiefOfStaffEventAcceptanceAllowed(execution.tenantId)) {
+                    throw ai.orchestree.backend.enterprise.CapabilityNotAvailableException(
+                        execution.tenantId,
+                        "ai_chief_of_staff",
+                        "ENTERPRISE",
+                        "Chief of Staff is in read-only mode for tenant '${execution.tenantId}' due to subscription downgrade."
+                    )
+                }
+            }
+
             while (currentNodeId != null) {
                 val currentId: String = currentNodeId
                 execution.currentNodeId = currentId
                 execution.context["_executionId"] = execution.id
+
+                // Node-level feature capability tier gating
+                val nodeCap = when (currentId) {
+                    "n1-aggregate-metrics", "n4-synthesize-briefing" -> "ai_chief_of_staff"
+                    "n1-ingest", "n2-correlate" -> "cross_system_intelligence"
+                    else -> null
+                }
+                if (nodeCap != null) {
+                    ai.orchestree.backend.enterprise.FeatureCapabilityService.enforceCapabilityGate(execution.tenantId, nodeCap)
+                }
+
                 val node = nodeRegistry[currentId] ?: error("Unknown node: $currentId")
                 val nodeStart = System.currentTimeMillis()
 
