@@ -220,6 +220,27 @@ class SchedulerEngine(
                 delay(60_000 * 60 * 24) // 24 hours
             }
         }
+
+        // 8. Confidence Calibration Loop (PRD Master Bagian 18, runs every 12 hours)
+        activeJobs["CONFIDENCE_CALIBRATION"] = scope.launch {
+            while (isActive) {
+                executeWithDlq(jobType = "CONFIDENCE_CALIBRATION", tenantId = null, payload = emptyMap()) {
+                    val records = confidenceCalibrationJob.calibrateConfidenceScores("tenant-default")
+                    "Calibrated ${records.size} confidence score buckets"
+                }
+                delay(60_000 * 60 * 12) // 12 hours
+            }
+        }
+
+        // 9. Competitor Intelligence Crawl Loop (PRD Master Bagian 20, runs every 6 hours)
+        activeJobs["COMPETITOR_CRAWL"] = scope.launch {
+            while (isActive) {
+                executeWithDlq(jobType = "COMPETITOR_CRAWL", tenantId = null, payload = emptyMap()) {
+                    competitorCrawlJob.execute("tenant-default", "https://example.com")
+                }
+                delay(60_000 * 60 * 6) // 6 hours
+            }
+        }
     }
 
     /**

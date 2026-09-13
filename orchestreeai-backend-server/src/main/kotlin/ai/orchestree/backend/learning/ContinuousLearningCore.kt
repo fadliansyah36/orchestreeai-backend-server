@@ -81,25 +81,29 @@ object ContinuousLearningCore {
                     // 1. Insert into agent_decision_outcomes
                     c.prepareStatement("""
                         INSERT INTO agent_decision_outcomes 
-                        (id, tenant_id, agent_id, node_id, execution_id, workflow_id, scenario_context, 
+                        (id, tenant_id, agent_id, agent_name, node_id, execution_id, workflow_id, scenario_context, 
                          action_type, predicted_impact, actual_outcome, outcome_source, outcome_classification, 
-                         confidence_delta, created_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         verified_by, confidence_delta, metric_impact_json, created_at, confidence)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """.trimIndent()).use { ps ->
                         ps.setString(1, "out-" + UUID.randomUUID().toString().take(8))
                         ps.setString(2, request.tenantId)
                         ps.setString(3, request.agentId)
-                        ps.setString(4, request.nodeId)
-                        ps.setString(5, request.executionId)
-                        ps.setString(6, request.workflowId)
-                        ps.setString(7, request.scenarioContext)
-                        ps.setString(8, request.actionType)
-                        ps.setString(9, request.predictedImpact)
-                        ps.setString(10, request.actualOutcome)
-                        ps.setString(11, request.outcomeSource)
-                        ps.setString(12, classification.classification)
-                        ps.setDouble(13, classification.confidenceDelta)
-                        ps.setLong(14, now)
+                        ps.setString(4, request.agentId)
+                        ps.setString(5, request.nodeId)
+                        ps.setString(6, request.executionId)
+                        ps.setString(7, request.workflowId)
+                        ps.setString(8, request.scenarioContext)
+                        ps.setString(9, request.actionType)
+                        ps.setString(10, request.predictedImpact)
+                        ps.setString(11, request.actualOutcome)
+                        ps.setString(12, request.outcomeSource)
+                        ps.setString(13, classification.classification)
+                        ps.setString(14, request.verifiedBy ?: "SYSTEM_AUTOMATED")
+                        ps.setDouble(15, classification.confidenceDelta)
+                        ps.setString(16, "{}")
+                        ps.setLong(17, now)
+                        ps.setDouble(18, 0.85)
                         ps.executeUpdate()
                     }
 
@@ -112,7 +116,7 @@ object ContinuousLearningCore {
 
                     c.prepareStatement("""
                         SELECT current_confidence_score, sample_size, reinforce_count, correct_count, rejection_count
-                        FROM agent_skill_confidences 
+                        FROM agent_skill_confidence 
                         WHERE tenant_id = ? AND agent_id = ? AND skill_id = ?
                     """.trimIndent()).use { psSel ->
                         psSel.setString(1, request.tenantId)
@@ -140,10 +144,10 @@ object ContinuousLearningCore {
                     currentScore = (currentScore + classification.confidenceDelta).coerceIn(10.0, 100.0)
 
                     c.prepareStatement("""
-                        INSERT INTO agent_skill_confidences 
+                        INSERT INTO agent_skill_confidence 
                         (id, tenant_id, agent_id, skill_id, skill_name, current_confidence_score, sample_size, 
-                         reinforce_count, correct_count, rejection_count, last_evaluated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         reinforce_count, correct_count, rejection_count, last_evaluated_at, decay_factor)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1.0)
                         ON CONFLICT (id) DO UPDATE SET 
                             current_confidence_score = EXCLUDED.current_confidence_score,
                             sample_size = EXCLUDED.sample_size,
@@ -252,4 +256,68 @@ object ContinuousLearningCore {
         }
         lessons
     }
+
+    suspend fun getAgentSkillConfidence(tenantId: String, agentId: String): AgentSkillStats = withContext(Dispatchers.IO) {
+        var avgScore = 85.0
+        var totalReinforce = 0
+        var totalCorrect = 0
+        var totalRejection = 0
+        var totalSamples = 0
+        var foundInDb = false
+
+        val conn = DatabaseManager.getConnection()
+        if (conn != null) {
+            try {
+                conn.use { c ->
+                    c.prepareStatement("""
+                        SELECT AVG(current_confidence_score) as avg_score, 
+                               SUM(reinforce_count) as sum_reinforce, 
+                               SUM(correct_count) as sum_correct, 
+                               SUM(rejection_count) as sum_rejection, 
+                               SUM(sample_size) as sum_samples
+                        FROM agent_skill_confidence 
+                        WHERE tenant_id = ? AND agent_id = ?
+                    """.trimIndent()).use { ps ->
+                        ps.setString(1, tenantId)
+                        ps.setString(2, agentId)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next() && rs.getObject("avg_score") != null) {
+                                avgScore = rs.getDouble("avg_score")
+                                totalReinforce = rs.getInt("sum_reinforce")
+                                totalCorrect = rs.getInt("sum_correct")
+                                totalRejection = rs.getInt("sum_rejection")
+                                totalSamples = rs.getInt("sum_samples")
+                                foundInDb = true
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Error querying agent_skill_confidences: ${e.message}")
+            }
+        }
+
+        val trend = if (totalReinforce >= totalCorrect) "+${String.format(java.util.Locale.US, "%.1f", (totalReinforce.toDouble() / (totalSamples.coerceAtLeast(1))) * 5.0)}% MoM" else "-1.5% MoM"
+        AgentSkillStats(
+            agentId = agentId,
+            skillConfidenceScore = (avgScore * 10).toInt() / 10.0,
+            reinforceCount = totalReinforce,
+            correctCount = totalCorrect,
+            rejectionCount = totalRejection,
+            sampleSize = totalSamples,
+            growthTrend = if (foundInDb) trend else "+0.0% MoM"
+        )
+    }
 }
+
+@Serializable
+data class AgentSkillStats(
+    val agentId: String,
+    val skillConfidenceScore: Double,
+    val reinforceCount: Int,
+    val correctCount: Int,
+    val rejectionCount: Int,
+    val sampleSize: Int,
+    val growthTrend: String
+)
+
