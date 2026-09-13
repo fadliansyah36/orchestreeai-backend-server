@@ -580,6 +580,25 @@ fun Route.omnichannelSalesRoutes() {
                         }
                     }
                 } catch (_: Exception) {}
+
+                if (convs.isEmpty()) {
+                    val inMem = InMemoryConversationStore.listConversations(tenantId)
+                    inMem.forEach { m ->
+                        convs.add(
+                            InboxConversationItem(
+                                id = m.id,
+                                tenantId = m.tenantId,
+                                customerName = m.senderName,
+                                channel = if (m.id.contains("tg")) "TELEGRAM" else "WHATSAPP",
+                                salesStage = "INQUIRY",
+                                lastMessage = m.lastSnippet,
+                                unreadCount = 0,
+                                assignedPersona = "RECEPTIONIST"
+                            )
+                        )
+                    }
+                }
+
                 convs
             }
             call.respond(HttpStatusCode.OK, list)
@@ -1216,16 +1235,40 @@ fun Route.omnichannelSalesRoutes() {
                     try {
                         val conn = DatabaseManager.getConnection()
                         conn?.use { c ->
-                            c.prepareStatement("""
-                                INSERT INTO conversation_messages (id, conversation_id, sender_type, sender_id, message_type, content, sent_at)
-                                VALUES (?, ?, 'AI_AGENT', ?, 'TEXT', ?, NOW())
-                            """.trimIndent()).use { psMsg ->
-                                psMsg.setString(1, "msg-${UUID.randomUUID().toString().take(8)}")
-                                psMsg.setString(2, convId)
-                                psMsg.setString(3, "agent-${currentPersona.name.lowercase()}")
-                                psMsg.setString(4, generatedText)
-                                psMsg.executeUpdate()
+                            // 1. Try standard schema (message_text, created_at, tenant_id)
+                            var inserted = false
+                            try {
+                                c.prepareStatement("""
+                                    INSERT INTO conversation_messages (id, conversation_id, tenant_id, sender_type, sender_id, sender_name, message_text, message_type, intent_detected, created_at)
+                                    VALUES (?, ?, ?, 'AI_AGENT', ?, ?, ?, 'TEXT', ?, NOW())
+                                """.trimIndent()).use { psMsg ->
+                                    psMsg.setString(1, "msg-${UUID.randomUUID().toString().take(8)}")
+                                    psMsg.setString(2, convId)
+                                    psMsg.setString(3, tenantId)
+                                    psMsg.setString(4, "agent-${currentPersona.name.lowercase()}")
+                                    psMsg.setString(5, "AI Persona (${currentPersona.name})")
+                                    psMsg.setString(6, generatedText)
+                                    psMsg.setString(7, intentResult.intent.name)
+                                    psMsg.executeUpdate()
+                                    inserted = true
+                                }
+                            } catch (_: Exception) {}
+
+                            if (!inserted) {
+                                try {
+                                    c.prepareStatement("""
+                                        INSERT INTO conversation_messages (id, conversation_id, sender_type, sender_id, message_type, content, sent_at)
+                                        VALUES (?, ?, 'AI_AGENT', ?, 'TEXT', ?, NOW())
+                                    """.trimIndent()).use { psMsg ->
+                                        psMsg.setString(1, "msg-${UUID.randomUUID().toString().take(8)}")
+                                        psMsg.setString(2, convId)
+                                        psMsg.setString(3, "agent-${currentPersona.name.lowercase()}")
+                                        psMsg.setString(4, generatedText)
+                                        psMsg.executeUpdate()
+                                    }
+                                } catch (_: Exception) {}
                             }
+
                             c.prepareStatement("UPDATE conversations SET last_message_snippet = ?, last_activity_at = NOW() WHERE id = ?").use { psUp ->
                                 psUp.setString(1, generatedText.take(120))
                                 psUp.setString(2, convId)
@@ -1234,6 +1277,16 @@ fun Route.omnichannelSalesRoutes() {
                         }
                     } catch (_: Exception) {}
                 }
+
+                InMemoryConversationStore.recordExchange(
+                    convId = convId,
+                    tenantId = tenantId,
+                    senderId = "customer-$convId",
+                    senderName = req.customerName,
+                    userMessage = req.customerMessage,
+                    aiReply = generatedText,
+                    intent = intentResult.intent.name
+                )
 
                 Pair(generatedText, "REPLIED")
             }

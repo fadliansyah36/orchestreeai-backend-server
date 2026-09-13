@@ -28,6 +28,8 @@ ALTER PUBLICATION "supabase_realtime" ADD TABLE "public"."llm_routing_rules";
 
 ALTER PUBLICATION "supabase_realtime" ADD TABLE "public"."mcp_tools";
 
+ALTER PUBLICATION "supabase_realtime" ADD TABLE "public"."messages";
+
 ALTER PUBLICATION "supabase_realtime" ADD TABLE "public"."notifications";
 
 ALTER PUBLICATION "supabase_realtime" ADD TABLE "public"."orders";

@@ -118,7 +118,41 @@ fun Route.chatRoutes() {
         get("/history/{conversationId}") {
             val convId = call.parameters["conversationId"] ?: ""
             val history = rollingMemory.getRollingHistory(convId)
-            call.respond(HttpStatusCode.OK, history.map { mapOf("role" to it.first, "content" to it.second) })
+            if (history.isNotEmpty()) {
+                call.respond(HttpStatusCode.OK, history.map { mapOf("role" to it.first, "content" to it.second) })
+                return@get
+            }
+
+            // Check InMemoryConversationStore
+            val inMemoryHistory = InMemoryConversationStore.getHistory(convId)
+            if (inMemoryHistory.isNotEmpty()) {
+                call.respond(HttpStatusCode.OK, inMemoryHistory.map { mapOf("role" to it.role, "content" to it.text) })
+                return@get
+            }
+
+            // Query database conversation_messages table
+            val dbMessages = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val list = mutableListOf<Map<String, String>>()
+                try {
+                    val conn = ai.orchestree.backend.billing.DatabaseManager.getConnection()
+                    conn?.use { c ->
+                        c.prepareStatement("SELECT sender_type, message_text FROM conversation_messages WHERE conversation_id = ? ORDER BY created_at ASC").use { ps ->
+                            ps.setString(1, convId)
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    val senderType = rs.getString("sender_type") ?: "CUSTOMER"
+                                    val role = if (senderType.equals("CUSTOMER", ignoreCase = true) || senderType.equals("user", ignoreCase = true)) "user" else "assistant"
+                                    val content = rs.getString("message_text") ?: ""
+                                    list.add(mapOf("role" to role, "content" to content))
+                                }
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+                list
+            }
+
+            call.respond(HttpStatusCode.OK, dbMessages)
         }
     }
 

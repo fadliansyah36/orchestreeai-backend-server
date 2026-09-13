@@ -142,58 +142,50 @@ fun Application.configureRouting() {
                 }
             }
 
+            val handleWhatsAppWebhook: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { call ->
+                val sig = call.request.header("X-Hub-Signature-256")
+                val body = call.receiveText()
+                val appSecret = ai.orchestree.backend.config.EnvLoader.get("META_APP_SECRET", "meta_webhook_secret")
+                val tenantId = call.request.headers["X-Tenant-Id"] ?: "tenant-default"
+                val result = whatsappHandler.processInboundWebhook(
+                    payload = body,
+                    signatureHeader = sig,
+                    appSecret = appSecret,
+                    defaultTenantId = tenantId
+                )
+                if (!result.verified) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to (result.errorMessage ?: "Invalid WhatsApp/Meta webhook signature")))
+                } else {
+                    call.respond(HttpStatusCode.OK, result)
+                }
+            }
+
+            val handleTelegramWebhook: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { call ->
+                val secretToken = call.request.header("X-Telegram-Bot-Api-Secret-Token")
+                val expectedToken = ai.orchestree.backend.config.EnvLoader.get("TELEGRAM_WEBHOOK_SECRET", ai.orchestree.backend.config.EnvLoader.get("TELEGRAM_OFFICIAL_BOT_TOKEN"))
+                val body = call.receiveText()
+                val tenantId = call.request.headers["X-Tenant-Id"] ?: "tenant-default"
+                val result = telegramHandler.processInboundWebhook(
+                    payload = body,
+                    secretTokenHeader = secretToken,
+                    expectedSecretToken = expectedToken,
+                    defaultTenantId = tenantId
+                )
+                if (!result.verified) {
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to (result.errorMessage ?: "Invalid Telegram webhook secret token")))
+                } else {
+                    call.respond(HttpStatusCode.OK, result)
+                }
+            }
+
             route("/webhooks") {
-                post("/payment/{gateway}") {
-                    val gateway = call.parameters["gateway"] ?: "midtrans"
-                    val body = call.receiveText()
-                    val serverKey = ai.orchestree.backend.config.EnvLoader.get("PAYMENT_GATEWAY_SERVER_KEY")
+                post("/whatsapp") { handleWhatsAppWebhook(call) }
+                post("/telegram") { handleTelegramWebhook(call) }
+            }
 
-                    val payloadObj = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull()
-                    val orderId = payloadObj?.get("order_id")?.jsonPrimitive?.content ?: ""
-                    val statusCode = payloadObj?.get("status_code")?.jsonPrimitive?.content ?: ""
-                    val grossAmount = payloadObj?.get("gross_amount")?.jsonPrimitive?.content ?: ""
-                    val signatureKey = payloadObj?.get("signature_key")?.jsonPrimitive?.content
-                        ?: call.request.header("X-Signature")
-                    val transactionStatus = payloadObj?.get("transaction_status")?.jsonPrimitive?.content ?: "settlement"
-
-                    val notif = PaymentNotification(
-                        orderId = orderId,
-                        statusCode = statusCode,
-                        grossAmount = grossAmount,
-                        transactionStatus = transactionStatus,
-                        signatureKey = signatureKey
-                    )
-
-                    val verified = paymentHandler.handlePaymentNotification(notif, serverKey)
-                    if (!verified) {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid payment webhook signature"))
-                    } else {
-                        call.respond(HttpStatusCode.OK, mapOf("status" to "processed", "gateway" to gateway))
-                    }
-                }
-
-                post("/whatsapp") {
-                    val sig = call.request.header("X-Hub-Signature-256")
-                    val body = call.receiveText()
-                    val appSecret = ai.orchestree.backend.config.EnvLoader.get("META_APP_SECRET", "meta_webhook_secret")
-                    val verified = whatsappHandler.handlePayload(body, sig, appSecret)
-                    if (!verified) {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid WhatsApp/Meta webhook signature"))
-                    } else {
-                        call.respond(HttpStatusCode.OK, mapOf("status" to "received"))
-                    }
-                }
-
-                post("/telegram") {
-                    val secretToken = call.request.header("X-Telegram-Bot-Api-Secret-Token")
-                    val expectedToken = ai.orchestree.backend.config.EnvLoader.get("TELEGRAM_WEBHOOK_SECRET", ai.orchestree.backend.config.EnvLoader.get("TELEGRAM_OFFICIAL_BOT_TOKEN"))
-                    val verified = telegramHandler.handleWebhook(secretToken, expectedToken)
-                    if (!verified) {
-                        call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid Telegram webhook secret token"))
-                    } else {
-                        call.respond(HttpStatusCode.OK, mapOf("status" to "ok"))
-                    }
-                }
+            route("/webhook") {
+                post("/whatsapp") { handleWhatsAppWebhook(call) }
+                post("/telegram") { handleTelegramWebhook(call) }
             }
 
             // Public Security & Admin Authentication Routes (Fase 124)

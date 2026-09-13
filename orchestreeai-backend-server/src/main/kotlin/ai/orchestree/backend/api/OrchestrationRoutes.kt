@@ -68,7 +68,32 @@ fun Route.orchestrationRoutes() {
             call.respond(HttpStatusCode.OK, result)
         }
 
+        post("/workflows/run") {
+            val req = call.receive<WorkflowDispatchRequest>()
+            val result = orchestrationEngine.runWorkflow(
+                tenantId = req.tenantId,
+                workflowDefId = req.workflowDefId,
+                prompt = req.prompt,
+                contextParams = req.contextParams
+            )
+            executionHistory[result.executionId] = result
+            call.respond(HttpStatusCode.OK, result)
+        }
+
         get("/status/{executionId}") {
+            val executionId = call.parameters["executionId"] ?: "unknown"
+            val result = executionHistory[executionId]
+            if (result != null) {
+                call.respond(HttpStatusCode.OK, result)
+            } else {
+                call.respond(
+                    HttpStatusCode.NotFound,
+                    mapOf("error" to "Execution $executionId not found")
+                )
+            }
+        }
+
+        get("/executions/{executionId}") {
             val executionId = call.parameters["executionId"] ?: "unknown"
             val result = executionHistory[executionId]
             if (result != null) {

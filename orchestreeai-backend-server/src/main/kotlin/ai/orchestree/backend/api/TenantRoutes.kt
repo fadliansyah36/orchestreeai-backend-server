@@ -503,15 +503,57 @@ fun Route.tenantRoutes() {
         post("/inbound-channel-message") {
             val req = call.receive<InboundChannelMessageApiRequest>()
             val gateway = ai.orchestree.backend.channels.ChannelGateway()
+            val orchestrationEngine = ai.orchestree.backend.orchestration.OrchestrationEngine(modelRouter = ai.orchestree.backend.modelrouter.ModelRouter())
             val result = gateway.handleInboundProactiveChannelMessage(
                 tenantId = req.tenantId,
                 channelType = req.channel,
                 senderId = req.senderId,
                 senderName = req.senderName,
                 messageText = req.message,
+                orchestrationEngine = orchestrationEngine,
                 taskRepo = taskRepo
             )
             call.respond(HttpStatusCode.OK, result)
+        }
+
+        // Proactive Subscriptions & Scope (PRD Master 15.1, 11.1)
+        route("/proactive") {
+            get("/subscriptions") {
+                val tenantId = call.parameters["id"] ?: "tenant-default"
+                call.respond(
+                    HttpStatusCode.OK,
+                    listOf(
+                        ProactiveSubscriptionItem(
+                            id = "sub-01",
+                            tenantId = tenantId,
+                            staffId = "staff-01",
+                            channel = "WHATSAPP",
+                            types = listOf("DAILY_BRIEF", "ANOMALY_ALERT"),
+                            sendTimes = listOf("08:00", "17:00"),
+                            status = "ACTIVE"
+                        )
+                    )
+                )
+            }
+
+            get("/scope/{staffId}") {
+                val staffId = call.parameters["staffId"] ?: ""
+                val jobLevel = call.request.queryParameters["jobLevel"]
+                val dept = call.request.queryParameters["department"]
+                val scopeRepo = ai.orchestree.backend.database.repositories.workforce.ProactiveCollaborationScopeRepository.defaultInstance
+                val scope = scopeRepo.determineProactiveScope(staffId, jobLevel, dept)
+                call.respond(HttpStatusCode.OK, scope)
+            }
+
+            post("/subscriptions") {
+                val req = call.receive<ProactiveSubscriptionRequest>()
+                val scopeRepo = ai.orchestree.backend.database.repositories.workforce.ProactiveCollaborationScopeRepository.defaultInstance
+                val scope = scopeRepo.determineProactiveScope(req.staffId)
+                call.respond(
+                    HttpStatusCode.Created,
+                    GenericStatusResponse(status = "ACTIVE", id = req.staffId, message = "Subscribed with scope ${scope.scopeType}")
+                )
+            }
         }
     }
 
@@ -519,12 +561,14 @@ fun Route.tenantRoutes() {
         post("/inbound-channel-message") {
             val req = call.receive<InboundChannelMessageApiRequest>()
             val gateway = ai.orchestree.backend.channels.ChannelGateway()
+            val orchestrationEngine = ai.orchestree.backend.orchestration.OrchestrationEngine(modelRouter = ai.orchestree.backend.modelrouter.ModelRouter())
             val result = gateway.handleInboundProactiveChannelMessage(
                 tenantId = req.tenantId,
                 channelType = req.channel,
                 senderId = req.senderId,
                 senderName = req.senderName,
                 messageText = req.message,
+                orchestrationEngine = orchestrationEngine,
                 taskRepo = taskRepo
             )
             call.respond(HttpStatusCode.OK, result)

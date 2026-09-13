@@ -68,7 +68,10 @@ class ManagementQueryEngine(
             val staffDept = scope.departmentCategoryCode?.lowercase() ?: "sales"
             val allowedAgents = scope.collaboratingAiJobTitleIds ?: emptyList()
 
-            val askingFinancials = qLower.contains("laba") || qLower.contains("profit") || qLower.contains("keuangan") || qLower.contains("cash flow") || qLower.contains("gaji")
+            val askingFinancials = qLower.contains("laba") || qLower.contains("profit") || qLower.contains("keuangan") || 
+                    qLower.contains("cash flow") || qLower.contains("cash") || qLower.contains("kas") || 
+                    qLower.contains("saldo") || qLower.contains("bank") || qLower.contains("rekening") || 
+                    qLower.contains("gaji") || qLower.contains("invoice") || qLower.contains("biaya")
             val askingCrossDepartmentKpi = qLower.contains("kpi perusahaan") || qLower.contains("seluruh departemen") || qLower.contains("divisi lain") || qLower.contains("laporan eksekutif")
 
             val isOutOfScope = when (staffDept) {

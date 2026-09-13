@@ -16,6 +16,8 @@ data class ProactiveCollaborationScope(
     val collaboratingAiJobTitleIds: List<String>? = null,
     val collaboratingAgentNames: List<String> = emptyList(),
     val departmentCategoryCode: String? = null,
+    val hasFinancialAccess: Boolean = false,
+    val financialDataRestricted: Boolean = true,
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -148,7 +150,9 @@ class ProactiveCollaborationScopeRepository(
                 scopeType = "executive_full_summary",
                 collaboratingAiJobTitleIds = null,
                 collaboratingAgentNames = listOf("AI Chief of Staff (Ringkasan Lintas Seluruh Departemen)"),
-                departmentCategoryCode = "executive"
+                departmentCategoryCode = "executive",
+                hasFinancialAccess = true,
+                financialDataRestricted = false
             )
             saveScope(scope)
             return scope
@@ -163,12 +167,15 @@ class ProactiveCollaborationScopeRepository(
                         "hubungi Admin untuk konfigurasi department_ai_collaboration_mapping"
             }
 
+            val isFinanceDept = mapping.departmentCategoryCode.equals("finance", ignoreCase = true)
             val scope = ProactiveCollaborationScope(
                 staffId = staffId,
                 scopeType = "department_scoped",
                 collaboratingAiJobTitleIds = mapping.aiJobCodes,
                 collaboratingAgentNames = mapping.aiJobNames,
-                departmentCategoryCode = mapping.departmentCategoryCode
+                departmentCategoryCode = mapping.departmentCategoryCode,
+                hasFinancialAccess = isFinanceDept,
+                financialDataRestricted = !isFinanceDept
             )
             saveScope(scope)
             return scope

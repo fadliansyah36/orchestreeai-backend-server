@@ -196,41 +196,40 @@ fun Route.generativeStudioRoutes(
 
         get("/assets") {
             val tenantId = call.request.queryParameters["tenantId"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    BrandAssetItem(
-                        id = "asset-01",
-                        tenantId = tenantId,
-                        title = "Corporate Logo Vector Dark",
-                        assetType = "LOGO",
-                        fileUrl = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe",
-                        isLocked = true
-                    ),
-                    BrandAssetItem(
-                        id = "asset-02",
-                        tenantId = tenantId,
-                        title = "Brand Typography & Color Palette",
-                        assetType = "STYLE_GUIDE",
-                        fileUrl = "https://images.unsplash.com/photo-1542744094-3a31f272c490",
-                        isLocked = false
-                    )
+            val overlays = brandAssetService.brandAssetOverlayRepo.getOverlays(tenantId)
+            val items = overlays.map {
+                BrandAssetItem(
+                    id = it.id,
+                    tenantId = it.tenantId,
+                    title = it.assetName,
+                    assetType = it.assetType,
+                    fileUrl = it.assetFileUrl,
+                    isLocked = it.assetType.equals("logo", ignoreCase = true) || it.assetType.equals("PLATFORM_ICON_LOGO", ignoreCase = true),
+                    createdAt = it.createdAt
                 )
-            )
+            }
+            call.respond(HttpStatusCode.OK, items)
         }
 
         post("/assets") {
             val req = call.receive<BrandAssetCreateRequest>()
             val tenantId = call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val created = brandAssetService.brandAssetOverlayRepo.upsert(
+                tenantId = tenantId,
+                assetType = req.assetType,
+                assetFileRef = req.fileUrl,
+                assetName = req.title
+            )
             call.respond(
                 HttpStatusCode.Created,
                 BrandAssetItem(
-                    id = "asset-${java.util.UUID.randomUUID().toString().take(8)}",
-                    tenantId = tenantId,
-                    title = req.title,
-                    assetType = req.assetType,
-                    fileUrl = req.fileUrl,
-                    isLocked = req.isLocked
+                    id = created.id,
+                    tenantId = created.tenantId,
+                    title = created.assetName,
+                    assetType = created.assetType,
+                    fileUrl = created.assetFileUrl,
+                    isLocked = req.isLocked,
+                    createdAt = created.createdAt
                 )
             )
         }

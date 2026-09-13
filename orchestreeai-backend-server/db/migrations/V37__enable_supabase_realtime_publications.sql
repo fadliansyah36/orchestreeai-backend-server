@@ -18,6 +18,7 @@ DECLARE
         'notifications',
         'conversations',
         'conversation_messages',
+        'messages',
         'competitor_insights',
         'chief_of_staff_briefings',
         'proactive_messages_log',
