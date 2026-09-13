@@ -94,6 +94,30 @@ class McpToolRegistry {
                     riskLevel = McpRiskLevel.CRITICAL
                 )
             )
+
+            try {
+                ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                    conn.prepareStatement("SELECT id, name, tool_code, description, input_schema_json, risk_level, is_enabled_globally, is_kill_switched FROM mcp_tools WHERE is_enabled_globally = true AND is_kill_switched = false").use { ps ->
+                        val rs = ps.executeQuery()
+                        while (rs.next()) {
+                            val toolName = rs.getString("name") ?: rs.getString("tool_code") ?: rs.getString("id")
+                            val desc = rs.getString("description") ?: ""
+                            val schema = rs.getString("input_schema_json") ?: "{}"
+                            val riskStr = rs.getString("risk_level") ?: "LOW"
+                            val risk = try { McpRiskLevel.valueOf(riskStr.uppercase()) } catch (_: Exception) { McpRiskLevel.LOW }
+                            registry.register(
+                                McpToolDefinition(
+                                    name = toolName,
+                                    description = desc,
+                                    inputSchema = schema,
+                                    riskLevel = risk
+                                )
+                            )
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+
             return registry
         }
     }

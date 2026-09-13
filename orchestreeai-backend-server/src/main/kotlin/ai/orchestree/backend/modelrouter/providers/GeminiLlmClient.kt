@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory
 
 class GeminiLlmClient(
     private val apiKeyProvider: () -> String,
-    private val defaultModel: String = "gemini-2.5-flash",
+    private val defaultModel: String = "gemini-flash-latest",
     private val httpClient: HttpClient = HttpClient(CIO)
 ) : LlmClient {
 
@@ -43,7 +43,13 @@ class GeminiLlmClient(
                 return@withContext Result.failure(IllegalStateException("GEMINI_API_KEY is missing"))
             }
 
-            val targetModel = request.model ?: defaultModel
+            val effectiveDefault = if (defaultModel.contains("2.5")) "gemini-flash-latest" else defaultModel
+            val rawModel = request.model ?: effectiveDefault
+            val targetModel = if (rawModel.contains("gemini", ignoreCase = true) && !rawModel.contains("2.5")) {
+                rawModel
+            } else {
+                effectiveDefault
+            }
             val endpoint = "https://generativelanguage.googleapis.com/v1beta/models/$targetModel:generateContent?key=$apiKey"
 
             val partsArray = buildJsonArray {

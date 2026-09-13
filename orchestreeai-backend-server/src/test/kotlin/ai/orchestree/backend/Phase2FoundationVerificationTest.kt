@@ -79,8 +79,9 @@ class Phase2FoundationVerificationTest {
     fun testSchedulerEngineActiveJobDefinitions() {
         val scheduler = SchedulerEngine()
         assertNotNull(scheduler)
-        // Ensure scheduler can claim and inspect queues without exceptions
-        val conn = DatabaseManager.getConnection()
-        assertNotNull(conn, "Database connection must be established")
+        assertNotNull(scheduler.paymentReconciliationJob, "Payment reconciliation job must be registered")
+        assertNotNull(scheduler.scheduledSelectionJob, "Selection analysis job must be registered")
+        assertNotNull(scheduler.schedulerJobQueueRepo, "Scheduler job queue repo must be registered")
+        assertNotNull(scheduler.deadLetterQueueRepo, "Dead letter queue repo must be registered")
     }
 }

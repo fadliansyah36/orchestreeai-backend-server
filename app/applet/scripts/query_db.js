@@ -1,4 +1,4 @@
-const { Client } = require("/tmp/node_modules/pg");
+const { Client } = require("pg");
 
 async function main() {
   const query = process.argv[2] || "SELECT id, tenant_id, workflow_def_id, status, started_at, completed_at, result_summary FROM workflow_executions ORDER BY started_at DESC LIMIT 5;";

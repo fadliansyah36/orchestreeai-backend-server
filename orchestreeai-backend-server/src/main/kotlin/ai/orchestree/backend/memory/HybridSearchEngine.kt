@@ -15,7 +15,7 @@ data class SearchMatch(
 )
 
 class HybridSearchEngine(
-    private val supabase: SupabaseClientProvider? = null,
+    private val supabase: SupabaseClientProvider? = SupabaseClientProvider.fromEnv(),
     private val memoryService: MemoryService = MemoryService()
 ) {
     private val logger = LoggerFactory.getLogger(HybridSearchEngine::class.java)

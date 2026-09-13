@@ -109,28 +109,62 @@ class MemoryDocumentRepository(
         list.removeIf { it.id == doc.id }
         list.add(doc)
 
-        if (supabase.isConfigured()) {
-            try {
-                val payload = mapOf(
-                    "id" to doc.id,
-                    "tenant_id" to doc.tenantId,
-                    "type" to doc.sourceType,
-                    "source_type" to doc.sourceType,
-                    "title" to doc.title,
-                    "content" to doc.content,
-                    "tags" to doc.tags,
-                    "source_reference" to doc.sourceReference,
-                    "relevance_weight" to doc.relevanceWeight,
-                    "is_archived" to doc.isArchived,
-                    "importance_score" to doc.importanceScore,
-                    "novelty_score" to doc.noveltyScore,
-                    "specificity_score" to doc.specificityScore,
-                    "metadata_json" to doc.metadata.toSafeJson(),
-                    "created_at" to doc.createdAt
-                )
-                supabase.insertRecord("memory_documents", doc.tenantId, payload.toSafeJson())
-            } catch (e: Exception) {
-                logger.debug("Supabase insert memory notice: ${e.message}")
+        try {
+            ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                conn.prepareStatement("""
+                    INSERT INTO memory_documents (
+                        id, tenant_id, type, source_type, title, content, tags, source_reference,
+                        relevance_weight, is_archived, importance_score, novelty_score, specificity_score
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (id) DO UPDATE SET
+                        title = EXCLUDED.title,
+                        content = EXCLUDED.content,
+                        tags = EXCLUDED.tags,
+                        relevance_weight = EXCLUDED.relevance_weight,
+                        is_archived = EXCLUDED.is_archived,
+                        importance_score = EXCLUDED.importance_score
+                """).use { ps ->
+                    ps.setString(1, doc.id)
+                    ps.setString(2, doc.tenantId)
+                    ps.setString(3, doc.sourceType)
+                    ps.setString(4, doc.sourceType)
+                    ps.setString(5, doc.title)
+                    ps.setString(6, doc.content)
+                    ps.setString(7, doc.tags)
+                    ps.setString(8, doc.sourceReference)
+                    ps.setDouble(9, doc.relevanceWeight)
+                    ps.setBoolean(10, doc.isArchived)
+                    ps.setDouble(11, doc.importanceScore)
+                    ps.setDouble(12, doc.noveltyScore)
+                    ps.setDouble(13, doc.specificityScore)
+                    ps.executeUpdate()
+                }
+            }
+        } catch (e: Exception) {
+            logger.warn("PostgreSQL insert memory notice: ${e.message}")
+            if (supabase.isConfigured()) {
+                try {
+                    val payload = mapOf(
+                        "id" to doc.id,
+                        "tenant_id" to doc.tenantId,
+                        "type" to doc.sourceType,
+                        "source_type" to doc.sourceType,
+                        "title" to doc.title,
+                        "content" to doc.content,
+                        "tags" to doc.tags,
+                        "source_reference" to doc.sourceReference,
+                        "relevance_weight" to doc.relevanceWeight,
+                        "is_archived" to doc.isArchived,
+                        "importance_score" to doc.importanceScore,
+                        "novelty_score" to doc.noveltyScore,
+                        "specificity_score" to doc.specificityScore,
+                        "metadata_json" to doc.metadata.toSafeJson(),
+                        "created_at" to doc.createdAt
+                    )
+                    supabase.insertRecord("memory_documents", doc.tenantId, payload.toSafeJson())
+                } catch (se: Exception) {
+                    logger.debug("Supabase insert memory notice: ${se.message}")
+                }
             }
         }
         Result.success(doc)
@@ -141,12 +175,80 @@ class MemoryDocumentRepository(
             val doc = list.find { it.id == id }
             if (doc != null) return@withContext doc
         }
+        try {
+            ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                conn.prepareStatement("SELECT id, tenant_id, source_type, title, content, tags, source_reference, relevance_weight, is_archived, importance_score, novelty_score, specificity_score FROM memory_documents WHERE id = ?").use { ps ->
+                    ps.setString(1, id)
+                    val rs = ps.executeQuery()
+                    if (rs.next()) {
+                        return@withContext MemoryDocumentRecord(
+                            id = rs.getString("id"),
+                            tenantId = rs.getString("tenant_id"),
+                            sourceType = rs.getString("source_type") ?: "episodic",
+                            title = rs.getString("title") ?: "",
+                            content = rs.getString("content") ?: "",
+                            tags = rs.getString("tags") ?: "",
+                            sourceReference = rs.getString("source_reference") ?: "",
+                            relevanceWeight = rs.getDouble("relevance_weight"),
+                            isArchived = rs.getBoolean("is_archived"),
+                            importanceScore = rs.getDouble("importance_score"),
+                            noveltyScore = rs.getDouble("novelty_score"),
+                            specificityScore = rs.getDouble("specificity_score")
+                        )
+                    }
+                }
+            }
+        } catch (_: Exception) {}
         null
     }
 
     suspend fun listByTenant(tenantId: String, includeArchived: Boolean = false): List<MemoryDocumentRecord> = withContext(Dispatchers.IO) {
-        val list = inMemoryStore[tenantId]?.toList() ?: emptyList()
-        if (includeArchived) list else list.filter { !it.isArchived }
+        val results = mutableListOf<MemoryDocumentRecord>()
+        try {
+            ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                val sql = if (includeArchived) {
+                    "SELECT id, tenant_id, source_type, title, content, tags, source_reference, relevance_weight, is_archived, importance_score, novelty_score, specificity_score FROM memory_documents WHERE tenant_id = ? OR tenant_id = 'tenant-default' ORDER BY id"
+                } else {
+                    "SELECT id, tenant_id, source_type, title, content, tags, source_reference, relevance_weight, is_archived, importance_score, novelty_score, specificity_score FROM memory_documents WHERE (tenant_id = ? OR tenant_id = 'tenant-default') AND is_archived = false ORDER BY id"
+                }
+                conn.prepareStatement(sql).use { ps ->
+                    ps.setString(1, tenantId)
+                    val rs = ps.executeQuery()
+                    while (rs.next()) {
+                        results.add(
+                            MemoryDocumentRecord(
+                                id = rs.getString("id"),
+                                tenantId = rs.getString("tenant_id"),
+                                sourceType = rs.getString("source_type") ?: "episodic",
+                                title = rs.getString("title") ?: "",
+                                content = rs.getString("content") ?: "",
+                                tags = rs.getString("tags") ?: "",
+                                sourceReference = rs.getString("source_reference") ?: "",
+                                relevanceWeight = rs.getDouble("relevance_weight"),
+                                isArchived = rs.getBoolean("is_archived"),
+                                importanceScore = rs.getDouble("importance_score"),
+                                noveltyScore = rs.getDouble("novelty_score"),
+                                specificityScore = rs.getDouble("specificity_score")
+                            )
+                        )
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            logger.warn("Query DB memory_documents notice: ${e.message}")
+        }
+
+        if (results.isNotEmpty()) {
+            return@withContext results
+        }
+
+        val inMem = inMemoryStore[tenantId]?.toList() ?: emptyList()
+        val filteredInMem = if (includeArchived) inMem else inMem.filter { !it.isArchived }
+        if (filteredInMem.isNotEmpty()) return@withContext filteredInMem
+
+        seedSampleDataIfEmpty(tenantId)
+        val refreshed = inMemoryStore[tenantId]?.toList() ?: emptyList()
+        if (includeArchived) refreshed else refreshed.filter { !it.isArchived }
     }
 
     fun clear() {
@@ -225,6 +327,38 @@ class MemoryDocumentRepository(
             )
 
             inMemoryStore[tenantId] = list
+
+            try {
+                ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                    conn.prepareStatement("""
+                        INSERT INTO memory_documents (
+                            id, tenant_id, type, source_type, title, content, tags, source_reference,
+                            relevance_weight, is_archived, importance_score, novelty_score, specificity_score
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT (id) DO NOTHING
+                    """).use { ps ->
+                        list.forEach { item ->
+                            ps.setString(1, item.id)
+                            ps.setString(2, item.tenantId)
+                            ps.setString(3, item.sourceType)
+                            ps.setString(4, item.sourceType)
+                            ps.setString(5, item.title)
+                            ps.setString(6, item.content)
+                            ps.setString(7, item.tags)
+                            ps.setString(8, item.sourceReference)
+                            ps.setDouble(9, item.relevanceWeight)
+                            ps.setBoolean(10, item.isArchived)
+                            ps.setDouble(11, item.importanceScore)
+                            ps.setDouble(12, item.noveltyScore)
+                            ps.setDouble(13, item.specificityScore)
+                            ps.addBatch()
+                        }
+                        ps.executeBatch()
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Seed DB memory_documents notice: ${e.message}")
+            }
         }
     }
 }

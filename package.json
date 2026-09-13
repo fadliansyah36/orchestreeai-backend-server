@@ -1,5 +1,9 @@
 {
+  "name": "orchestreeai-backend",
+  "version": "1.0.0",
   "scripts": {
+    "start": "java -jar orchestreeai-backend-server/build/libs/orchestreeai-backend-server-1.0.0-all.jar",
+    "dev": "java -jar orchestreeai-backend-server/build/libs/orchestreeai-backend-server-1.0.0-all.jar",
     "db:push": "supabase db push"
   },
   "dependencies": {

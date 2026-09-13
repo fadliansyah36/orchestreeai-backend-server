@@ -93,7 +93,56 @@ fun Route.authRoutes() {
                 )
                 return@post
             }
-            val userId = "usr-${java.util.UUID.nameUUIDFromBytes(req.email.toByteArray()).toString().take(8)}"
+            val initialUserId = "usr-${java.util.UUID.nameUUIDFromBytes(req.email.toByteArray()).toString().take(8)}"
+            var userId = initialUserId
+
+            try {
+                ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                    conn.prepareStatement("SELECT id FROM users WHERE email = ?").use { ps ->
+                        ps.setString(1, req.email)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next()) {
+                                userId = rs.getString("id")
+                            }
+                        }
+                    }
+                    conn.prepareStatement("""
+                        INSERT INTO users (id, tenant_id, email, name, is_active, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, true, NOW(), NOW())
+                        ON CONFLICT (id) DO UPDATE SET updated_at = NOW()
+                    """).use { ps ->
+                        ps.setString(1, userId)
+                        ps.setString(2, resolvedTenantId)
+                        ps.setString(3, req.email)
+                        ps.setString(4, req.email.substringBefore("@").replaceFirstChar { it.uppercase() })
+                        ps.executeUpdate()
+                    }
+
+                    val sessionId = "sess-${java.util.UUID.randomUUID().toString().take(8)}"
+                    val clientIp = call.request.header("X-Forwarded-For")?.split(",")?.firstOrNull()?.trim()
+                        ?: runCatching { call.request.origin.remoteHost }.getOrNull()
+                        ?: "127.0.0.1"
+                    val userAgent = call.request.header("User-Agent") ?: "OrchestreeAI-Mobile/1.0"
+
+                    conn.prepareStatement("""
+                        INSERT INTO user_sessions (id, user_id, tenant_id, device_name, os_name, ip_address, location_approx, is_current_session, created_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, true, ?)
+                        ON CONFLICT (id) DO NOTHING
+                    """).use { ps ->
+                        ps.setString(1, sessionId)
+                        ps.setString(2, userId)
+                        ps.setString(3, resolvedTenantId)
+                        ps.setString(4, userAgent.take(50))
+                        ps.setString(5, "Android/Linux")
+                        ps.setString(6, clientIp)
+                        ps.setString(7, "Jakarta, ID")
+                        ps.setLong(8, System.currentTimeMillis())
+                        ps.executeUpdate()
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("User session record warning: ${e.message}")
+            }
 
             val now = Date()
             val expiresAt = Date(now.time + 3600 * 1000) // 1 hour
@@ -170,18 +219,55 @@ fun Route.authRoutes() {
             try {
                 val decoded = JWT.decode(tokenStr)
                 val userId = decoded.subject ?: decoded.getClaim("user_id")?.asString() ?: "usr-current"
-                val sessions = listOf(
-                    UserSessionDto(
-                        id = "sess-${java.util.UUID.randomUUID().toString().take(8)}",
-                        userId = userId,
-                        deviceName = call.request.headers["User-Agent"]?.take(50) ?: "Active Client Device",
-                        ipAddress = "127.0.0.1",
-                        userAgent = call.request.headers["User-Agent"] ?: "OrchestreeAI-Mobile/1.0",
-                        isCurrent = true,
-                        createdAt = decoded.issuedAt?.time ?: (System.currentTimeMillis() - 3600000),
-                        expiresAt = decoded.expiresAt?.time ?: (System.currentTimeMillis() + 86400000)
+                val sessions = mutableListOf<UserSessionDto>()
+
+                try {
+                    ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                        conn.prepareStatement("""
+                            SELECT id, user_id, device_name, ip_address, is_current_session, created_at
+                            FROM user_sessions
+                            WHERE user_id = ?
+                            ORDER BY created_at DESC
+                            LIMIT 20
+                        """).use { ps ->
+                            ps.setString(1, userId)
+                            val rs = ps.executeQuery()
+                            while (rs.next()) {
+                                val createdAt = rs.getLong("created_at")
+                                val devName = rs.getString("device_name") ?: "Active Client Device"
+                                sessions.add(
+                                    UserSessionDto(
+                                        id = rs.getString("id"),
+                                        userId = rs.getString("user_id"),
+                                        deviceName = devName,
+                                        ipAddress = rs.getString("ip_address") ?: "127.0.0.1",
+                                        userAgent = devName,
+                                        isCurrent = rs.getBoolean("is_current_session"),
+                                        createdAt = createdAt,
+                                        expiresAt = createdAt + 86400000L
+                                    )
+                                )
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Query sessions database warning: ${e.message}")
+                }
+
+                if (sessions.isEmpty()) {
+                    sessions.add(
+                        UserSessionDto(
+                            id = "sess-${java.util.UUID.randomUUID().toString().take(8)}",
+                            userId = userId,
+                            deviceName = call.request.headers["User-Agent"]?.take(50) ?: "Active Client Device",
+                            ipAddress = "127.0.0.1",
+                            userAgent = call.request.headers["User-Agent"] ?: "OrchestreeAI-Mobile/1.0",
+                            isCurrent = true,
+                            createdAt = decoded.issuedAt?.time ?: (System.currentTimeMillis() - 3600000),
+                            expiresAt = decoded.expiresAt?.time ?: (System.currentTimeMillis() + 86400000)
+                        )
                     )
-                )
+                }
                 call.respond(HttpStatusCode.OK, sessions)
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Token otentikasi tidak valid"))
@@ -189,7 +275,19 @@ fun Route.authRoutes() {
         }
 
         post("/sessions/revoke/{id}") {
-            call.respond(HttpStatusCode.OK, mapOf("status" to "revoked"))
+            val sessionId = call.parameters["id"] ?: ""
+            var revoked = false
+            try {
+                ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                    conn.prepareStatement("DELETE FROM user_sessions WHERE id = ?").use { ps ->
+                        ps.setString(1, sessionId)
+                        revoked = ps.executeUpdate() > 0
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Revoke session DB warning: ${e.message}")
+            }
+            call.respond(HttpStatusCode.OK, mapOf("status" to "revoked", "id" to sessionId, "success" to revoked))
         }
 
         get("/profile") {
@@ -210,20 +308,52 @@ fun Route.authRoutes() {
                     return@get
                 }
                 val email = decoded.getClaim("email")?.asString() ?: "admin@nusantara.co.id"
-                val name = decoded.getClaim("name")?.asString() ?: email.substringBefore("@").replaceFirstChar { it.uppercase() }
-                call.respond(
-                    HttpStatusCode.OK,
-                    UserProfileDto(
+                val defaultName = decoded.getClaim("name")?.asString() ?: email.substringBefore("@").replaceFirstChar { it.uppercase() }
+
+                var userProfile: UserProfileDto? = null
+                try {
+                    ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                        conn.prepareStatement("""
+                            SELECT id, tenant_id, name, email, phone, telegram_chat_id, theme_preference, language_preference
+                            FROM users
+                            WHERE id = ? OR email = ?
+                            LIMIT 1
+                        """).use { ps ->
+                            ps.setString(1, userId)
+                            ps.setString(2, email)
+                            val rs = ps.executeQuery()
+                            if (rs.next()) {
+                                userProfile = UserProfileDto(
+                                    userId = rs.getString("id"),
+                                    tenantId = rs.getString("tenant_id") ?: tenantId,
+                                    name = rs.getString("name") ?: defaultName,
+                                    email = rs.getString("email") ?: email,
+                                    phone = rs.getString("phone") ?: "+6281234567890",
+                                    telegramChatId = rs.getString("telegram_chat_id") ?: "@orchestree_admin",
+                                    themePreference = rs.getString("theme_preference") ?: "SYSTEM",
+                                    languagePreference = rs.getString("language_preference") ?: "id"
+                                )
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    logger.warn("Query user profile DB warning: ${e.message}")
+                }
+
+                if (userProfile == null) {
+                    userProfile = UserProfileDto(
                         userId = userId,
                         tenantId = tenantId,
-                        name = name,
+                        name = defaultName,
                         email = email,
                         phone = "+6281234567890",
                         telegramChatId = "@orchestree_admin",
                         themePreference = "SYSTEM",
                         languagePreference = "id"
                     )
-                )
+                }
+
+                call.respond(HttpStatusCode.OK, userProfile!!)
             } catch (e: Exception) {
                 call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Token otentikasi tidak valid"))
             }
@@ -231,6 +361,33 @@ fun Route.authRoutes() {
 
         post("/profile") {
             val req = call.receive<UserProfileDto>()
+            try {
+                ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                    conn.prepareStatement("""
+                        INSERT INTO users (id, tenant_id, name, email, phone, telegram_chat_id, theme_preference, language_preference, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())
+                        ON CONFLICT (id) DO UPDATE SET
+                            name = EXCLUDED.name,
+                            phone = EXCLUDED.phone,
+                            telegram_chat_id = EXCLUDED.telegram_chat_id,
+                            theme_preference = EXCLUDED.theme_preference,
+                            language_preference = EXCLUDED.language_preference,
+                            updated_at = NOW()
+                    """).use { ps ->
+                        ps.setString(1, req.userId)
+                        ps.setString(2, req.tenantId)
+                        ps.setString(3, req.name)
+                        ps.setString(4, req.email)
+                        ps.setString(5, req.phone)
+                        ps.setString(6, req.telegramChatId)
+                        ps.setString(7, req.themePreference)
+                        ps.setString(8, req.languagePreference)
+                        ps.executeUpdate()
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Update user profile DB warning: ${e.message}")
+            }
             call.respond(HttpStatusCode.OK, req)
         }
 

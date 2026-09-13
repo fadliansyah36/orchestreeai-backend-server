@@ -56,7 +56,8 @@ class StartupValidator(
         val missing = mutableListOf<String>()
 
         if (config.supabase.url.isBlank()) missing.add("SUPABASE_URL")
-        if (config.supabase.serviceRoleKey.isBlank()) missing.add("SUPABASE_SERVICE_ROLE_KEY")
+        val hasDb = ai.orchestree.backend.billing.DatabaseManager.getDatabaseUrl().isNotBlank()
+        if (config.supabase.serviceRoleKey.isBlank() && !hasDb) missing.add("SUPABASE_SERVICE_ROLE_KEY or DATABASE_URL")
         if (config.security.jwtSecretKey.isBlank()) missing.add("JWT_SECRET_KEY")
 
         if (missing.isNotEmpty()) {
@@ -68,11 +69,22 @@ class StartupValidator(
     }
 
     suspend fun verifyDatabaseConnection(config: AppConfig) = withContext(Dispatchers.IO) {
+        try {
+            val directConn = ai.orchestree.backend.billing.DatabaseManager.getConnection()
+            if (directConn != null) {
+                directConn.close()
+                logger.info("[STARTUP] Database Supabase (Direct PostgreSQL) terverifikasi terhubung.")
+                return@withContext
+            }
+        } catch (e: Exception) {
+            logger.warn("[STARTUP] Direct PostgreSQL connection probe failed: ${e.message}")
+        }
+
         val supabaseUrl = config.supabase.url.trimEnd('/')
         val serviceKey = config.supabase.serviceRoleKey
 
         if (supabaseUrl.isBlank() || serviceKey.isBlank()) {
-            handleFatalFailure("DatabaseConnection", "SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY kosong")
+            handleFatalFailure("DatabaseConnection", "SUPABASE_URL atau SUPABASE_SERVICE_ROLE_KEY kosong dan direct DB gagal")
             return@withContext
         }
 
@@ -201,10 +213,15 @@ class StartupValidator(
 
         val primary = providers.first()
         val primaryKey = ai.orchestree.backend.config.EnvLoader.get(primary.apiKeyEnv)
+        val env = ai.orchestree.backend.config.EnvLoader.get("APPLICATION_ENV", "development")
         if (primaryKey.isBlank() || primaryKey == "placeholder") {
-            val errMsg = "Provider prioritas 1 [${primary.providerCode}] tidak memiliki kredensial yang valid (${primary.apiKeyEnv} kosong/placeholder). Server GAGAL startup untuk mencegah silent fallback ke Gemini."
-            logger.error("[STARTUP FATAL] $errMsg")
-            throw FatalConfigurationException(errMsg)
+            if (env.equals("production", ignoreCase = true)) {
+                val errMsg = "Provider prioritas 1 [${primary.providerCode}] tidak memiliki kredensial yang valid (${primary.apiKeyEnv} kosong/placeholder). Server GAGAL startup untuk mencegah silent fallback ke Gemini."
+                logger.error("[STARTUP FATAL] $errMsg")
+                throw FatalConfigurationException(errMsg)
+            } else {
+                logger.warn("[STARTUP DEV] Provider prioritas 1 [${primary.providerCode}] tidak memiliki key di dev mode. Pengecekan dilanjutkan.")
+            }
         }
 
         val primaryCode = primary.providerCode.lowercase()

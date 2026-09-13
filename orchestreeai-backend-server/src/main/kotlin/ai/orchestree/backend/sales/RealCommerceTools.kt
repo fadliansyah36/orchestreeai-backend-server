@@ -323,9 +323,45 @@ class RealInvoiceGenerateTool {
 }
 
 class RealDiscountApplyTool {
+    private val logger = LoggerFactory.getLogger(RealDiscountApplyTool::class.java)
+
     suspend fun execute(tenantId: String, parameters: Map<String, String>): String = withContext(Dispatchers.IO) {
         val discountPct = parameters["requested_discount_pct"]?.toDoubleOrNull() ?: 5.0
-        val cartId = parameters["order_or_cart_id"] ?: ""
+        val cartId = parameters["order_or_cart_id"] ?: parameters["cart_id"] ?: ""
+        var originalTotal = 0.0
+        var discountedTotal = 0.0
+        var discountAmount = 0.0
+
+        val conn = DatabaseManager.getConnection()
+        if (conn != null && cartId.isNotBlank()) {
+            try {
+                conn.use { c ->
+                    c.prepareStatement("SELECT subtotal, total_amount FROM carts WHERE id = ? AND tenant_id = ?").use { ps ->
+                        ps.setString(1, cartId)
+                        ps.setString(2, tenantId)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next()) {
+                                originalTotal = rs.getDouble("total_amount")
+                                discountAmount = originalTotal * (discountPct / 100.0)
+                                discountedTotal = (originalTotal - discountAmount).coerceAtLeast(0.0)
+                            }
+                        }
+                    }
+                    if (discountPct <= 10.0 && originalTotal > 0.0) {
+                        c.prepareStatement("UPDATE carts SET discount_amount = ?, total_amount = ?, updated_at = ? WHERE id = ? AND tenant_id = ?").use { psUp ->
+                            psUp.setDouble(1, discountAmount)
+                            psUp.setDouble(2, discountedTotal)
+                            psUp.setLong(3, System.currentTimeMillis())
+                            psUp.setString(4, cartId)
+                            psUp.setString(5, tenantId)
+                            psUp.executeUpdate()
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Database error in RealDiscountApplyTool: ${e.message}")
+            }
+        }
 
         if (discountPct <= 10.0) {
             // Autonomous Approval
@@ -333,7 +369,10 @@ class RealDiscountApplyTool {
                 put("status", "APPLIED")
                 put("approved", true)
                 put("requires_manager_approval", false)
+                put("cart_id", cartId)
                 put("discount_pct", discountPct)
+                put("discount_amount", discountAmount)
+                put("final_total", if (discountedTotal > 0.0) discountedTotal else originalTotal)
             }.toString()
         } else {
             // Requires Manager Approval
@@ -341,19 +380,134 @@ class RealDiscountApplyTool {
                 put("status", "ESCALATED_APPROVAL")
                 put("approved", false)
                 put("requires_manager_approval", true)
+                put("cart_id", cartId)
                 put("discount_pct", discountPct)
+                put("original_total", originalTotal)
             }.toString()
         }
     }
 }
 
 class RealRefundProcessTool {
+    private val logger = LoggerFactory.getLogger(RealRefundProcessTool::class.java)
+
     suspend fun execute(tenantId: String, parameters: Map<String, String>): String = withContext(Dispatchers.IO) {
-        val amount = parameters["refund_amount"]?.toDoubleOrNull() ?: 0.0
-        buildJsonObject {
-            put("status", "WAITING_MANAGER_APPROVAL")
-            put("requires_manager_approval", true)
-            put("amount", amount)
-        }.toString()
+        val orderIdOrTrx = parameters["trxId"] ?: parameters["order_id"] ?: parameters["order_number"] ?: ""
+        val amount = parameters["amount"]?.toDoubleOrNull() ?: parameters["refund_amount"]?.toDoubleOrNull() ?: 0.0
+        val reason = parameters["reason"] ?: "Customer requested refund via AI assistant"
+
+        var foundOrderId = orderIdOrTrx
+        var foundOrderNumber = orderIdOrTrx
+        var foundCustomerId = "cust-default"
+        var foundCustomerName = "Pelanggan"
+        var orderTotal = amount
+        var orderStatus = "PAID"
+        var dbPersisted = false
+
+        val conn = DatabaseManager.getConnection()
+        if (conn != null) {
+            try {
+                conn.use { c ->
+                    if (orderIdOrTrx.isNotBlank()) {
+                        c.prepareStatement("SELECT id, order_number, customer_id, customer_name, total_amount, status FROM orders WHERE (id = ? OR order_number = ?) AND (tenant_id = ? OR tenant_id = 'tenant-default')").use { ps ->
+                            ps.setString(1, orderIdOrTrx)
+                            ps.setString(2, orderIdOrTrx)
+                            ps.setString(3, tenantId)
+                            ps.executeQuery().use { rs ->
+                                if (rs.next()) {
+                                    foundOrderId = rs.getString("id")
+                                    foundOrderNumber = rs.getString("order_number") ?: foundOrderId
+                                    foundCustomerId = rs.getString("customer_id") ?: "cust-default"
+                                    foundCustomerName = rs.getString("customer_name") ?: "Pelanggan"
+                                    orderTotal = rs.getDouble("total_amount")
+                                    orderStatus = rs.getString("status") ?: "PAID"
+                                }
+                            }
+                        }
+                    }
+
+                    val refundAmountToProcess = if (amount > 0.0) amount else orderTotal
+                    val ticketId = "sr-ref-" + UUID.randomUUID().toString().take(8)
+                    val ticketNumber = "REF-${System.currentTimeMillis() / 1000}-${(100..999).random()}"
+                    val now = System.currentTimeMillis()
+
+                    val customerContact = parameters["customer_contact"] ?: "081234567890"
+
+                    c.prepareStatement("""
+                        INSERT INTO service_requests (
+                            id, tenant_id, ticket_number, customer_id, customer_name, customer_contact, order_id, order_number,
+                            request_type, priority, status, subject, description, requested_amount, reason_code,
+                            handled_by_ai, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'REFUND', 'HIGH', 'WAITING_MANAGER_APPROVAL', ?, ?, ?, 'CUSTOMER_RETURN', true, ?, ?)
+                    """.trimIndent()).use { psSr ->
+                        psSr.setString(1, ticketId)
+                        psSr.setString(2, tenantId)
+                        psSr.setString(3, ticketNumber)
+                        psSr.setString(4, foundCustomerId)
+                        psSr.setString(5, foundCustomerName)
+                        psSr.setString(6, customerContact)
+                        psSr.setString(7, foundOrderId)
+                        psSr.setString(8, foundOrderNumber)
+                        psSr.setString(9, "Permintaan Refund untuk Pesanan $foundOrderNumber")
+                        psSr.setString(10, reason)
+                        psSr.setDouble(11, refundAmountToProcess)
+                        psSr.setLong(12, now)
+                        psSr.setLong(13, now)
+                        psSr.executeUpdate()
+                    }
+
+                    if (foundOrderId.isNotBlank()) {
+                        c.prepareStatement("UPDATE orders SET status = 'REFUND_REQUESTED', updated_at = ? WHERE id = ?").use { psUp ->
+                            psUp.setLong(1, now)
+                            psUp.setString(2, foundOrderId)
+                            psUp.executeUpdate()
+                        }
+                    }
+
+                    c.prepareStatement("""
+                        INSERT INTO audit_logs (id, tenant_id, actor_name, actor_role, action, entity_target, details, timestamp)
+                        VALUES (?, ?, 'RealRefundProcessTool', 'AI_AGENT', 'REFUND_REQUEST_INITIATED', ?, ?, CURRENT_TIMESTAMP)
+                    """.trimIndent()).use { psAudit ->
+                        psAudit.setString(1, "audit-" + UUID.randomUUID().toString().take(8))
+                        psAudit.setString(2, tenantId)
+                        psAudit.setString(3, "order:$foundOrderId")
+                        psAudit.setString(4, "Refund ticket $ticketNumber initiated for amount Rp $refundAmountToProcess. Reason: $reason")
+                        psAudit.executeUpdate()
+                    }
+
+                    dbPersisted = true
+                    buildJsonObject {
+                        put("status", "WAITING_MANAGER_APPROVAL")
+                        put("requires_manager_approval", true)
+                        put("refund_ticket_id", ticketId)
+                        put("ticket_number", ticketNumber)
+                        put("order_id", foundOrderId)
+                        put("order_number", foundOrderNumber)
+                        put("order_total", orderTotal)
+                        put("requested_refund_amount", refundAmountToProcess)
+                        put("persisted_in_db", true)
+                        put("reason", reason)
+                    }.toString()
+                }
+            } catch (e: Exception) {
+                logger.warn("Database error in RealRefundProcessTool: ${e.message}")
+                buildJsonObject {
+                    put("status", "WAITING_MANAGER_APPROVAL")
+                    put("requires_manager_approval", true)
+                    put("order_id", foundOrderId)
+                    put("amount", amount)
+                    put("persisted_in_db", false)
+                    put("error", e.message ?: "Unknown database error")
+                }.toString()
+            }
+        } else {
+            buildJsonObject {
+                put("status", "WAITING_MANAGER_APPROVAL")
+                put("requires_manager_approval", true)
+                put("order_id", foundOrderId)
+                put("amount", amount)
+                put("persisted_in_db", false)
+            }.toString()
+        }
     }
 }

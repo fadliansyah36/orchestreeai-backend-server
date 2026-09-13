@@ -156,6 +156,31 @@ object WorkflowDefinitions {
                 WorkflowNodeDef("sales-n4-persona-llm", "Synthesize Empathetic Persona Reply via ModelRouter", WorkflowNodeType.LLM_GENERATE, 3),
                 WorkflowNodeDef("sales-n5-deliver", "Deliver to Omnichannel Customer", WorkflowNodeType.DELIVER, 4)
             )
+        ),
+        WorkflowDefinition(
+            id = "wf-sales-pipeline",
+            name = "Sales Pipeline & Lead Conversion",
+            domain = "salesmarketing",
+            description = "Lead qualification, customer routing, and sales follow-up automation",
+            nodes = listOf(
+                WorkflowNodeDef("sales-n1-identity", "Resolve Customer Identity", WorkflowNodeType.TOOL_CALL, 0),
+                WorkflowNodeDef("sales-n2-classify", "Classify Sales Intent & Persona", WorkflowNodeType.CLASSIFY, 1),
+                WorkflowNodeDef("sales-n3-grounding", "Catalog Grounding & Stock Check", WorkflowNodeType.TOOL_CALL, 2),
+                WorkflowNodeDef("sales-n4-persona-llm", "Synthesize Empathetic Persona Reply via ModelRouter", WorkflowNodeType.LLM_GENERATE, 3),
+                WorkflowNodeDef("sales-n5-deliver", "Deliver to Omnichannel Customer", WorkflowNodeType.DELIVER, 4)
+            )
+        ),
+        WorkflowDefinition(
+            id = "wf-creative-studio",
+            name = "Generative Creative Studio Workflow",
+            domain = "generativestudio",
+            description = "Creative concept planning, asset generation, brand compliance, and delivery",
+            nodes = listOf(
+                WorkflowNodeDef("n1-plan", "Content Planning & Copywriting", WorkflowNodeType.PLAN, 0),
+                WorkflowNodeDef("n2-image-gen", "Generate Visual Assets", WorkflowNodeType.TOOL_CALL, 1),
+                WorkflowNodeDef("n3-guardrail", "Compliance & Brand Guardrail", WorkflowNodeType.LLM_GENERATE, 2),
+                WorkflowNodeDef("n4-deliver", "Schedule / Publish", WorkflowNodeType.DELIVER, 3)
+            )
         )
     )
 

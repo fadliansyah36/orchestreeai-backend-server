@@ -4,7 +4,7 @@ data class AppConfig(
     val environment: String = System.getenv("APPLICATION_ENV") ?: "development",
     val port: Int = System.getenv("BACKEND_PORT")?.toIntOrNull()
         ?: System.getenv("PORT")?.toIntOrNull()?.takeIf { it != 8080 }
-        ?: 8082,
+        ?: 3000,
     val supabase: SupabaseConfig = SupabaseConfig.fromEnv(),
     val redis: RedisConfig = RedisConfig.fromEnv(),
     val security: SecurityConfig = SecurityConfig.fromEnv()

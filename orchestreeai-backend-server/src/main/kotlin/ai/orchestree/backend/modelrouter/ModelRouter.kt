@@ -81,7 +81,7 @@ class ModelRouter(
 
     val geminiClient = GeminiLlmClient(
         apiKeyProvider = { ai.orchestree.backend.config.EnvLoader.get("GEMINI_API_KEY") },
-        defaultModel = "gemini-3.5-flash-lite"
+        defaultModel = ai.orchestree.backend.config.EnvLoader.get("GEMINI_MODEL_NAME", "gemini-flash-latest")
     )
 
     val gptImage2Client = GptImage2Client(
@@ -104,6 +104,8 @@ class ModelRouter(
         put("openrouter", openRouterClient)
         put("groq", groqClient)
         put("gpt_image_2", gptImage2Client)
+        put("gemini", geminiClient)
+        put("google_gemini", geminiClient)
     }
 
     suspend fun route(request: ModelRouteRequest): Result<LlmResponse> = execute(request)
@@ -153,9 +155,21 @@ class ModelRouter(
         val activeProviders = providerRepo.getLlmProvidersOrderedByFallbackPriority()
             .filter { it.isEnabled && it.healthStatus != "disabled" }
             .map { it.providerCode.lowercase() }
-            .filter { it !in setOf("gemini", "google_gemini", "openai", "openai_dalle", "anthropic") }
+            .filter { it !in setOf("openai", "openai_dalle", "anthropic") }
             .filter { providers.containsKey(it) }
-        val effectiveProviders = if (activeProviders.isNotEmpty()) activeProviders else listOf("nvidia_nim", "openrouter")
+            .toMutableList()
+
+        if (ai.orchestree.backend.config.AppConfig.hasGeminiApiKeyConfigured() && "gemini" !in activeProviders && providers.containsKey("gemini")) {
+            activeProviders.add("gemini")
+        }
+
+        val effectiveProviders = if (activeProviders.isNotEmpty()) activeProviders else {
+            val list = mutableListOf("nvidia_nim", "openrouter")
+            if (ai.orchestree.backend.config.AppConfig.hasGeminiApiKeyConfigured()) {
+                list.add("gemini")
+            }
+            list
+        }
 
         val attemptedProviders = mutableListOf<String>()
         val providerErrors = mutableMapOf<String, String>()

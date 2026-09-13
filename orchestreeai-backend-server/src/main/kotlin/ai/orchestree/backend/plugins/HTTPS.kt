@@ -15,12 +15,15 @@ import io.ktor.server.response.respondRedirect
 
 val HttpsEnforcementPlugin = createApplicationPlugin(name = "HttpsEnforcementPlugin") {
     onCall { call ->
-        val proto = call.request.header("X-Forwarded-Proto")
-        if (proto != null && proto.equals("http", ignoreCase = true)) {
-            val host = call.request.host()
-            val uri = call.request.uri
-            call.response.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
-            call.respondRedirect("https://$host$uri", permanent = true)
+        val env = ai.orchestree.backend.config.EnvLoader.get("APPLICATION_ENV", "development")
+        if (env.equals("production", ignoreCase = true)) {
+            val proto = call.request.header("X-Forwarded-Proto")
+            if (proto != null && proto.equals("http", ignoreCase = true)) {
+                val host = call.request.host()
+                val uri = call.request.uri
+                call.response.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
+                call.respondRedirect("https://$host$uri", permanent = true)
+            }
         }
     }
 }
