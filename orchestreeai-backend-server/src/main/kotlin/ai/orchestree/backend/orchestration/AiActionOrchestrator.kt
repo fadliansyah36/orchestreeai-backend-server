@@ -8,6 +8,7 @@ import ai.orchestree.backend.enterprise.AiDataPermissionService
 import ai.orchestree.backend.enterprise.EnterpriseIntegrationFabricService
 import ai.orchestree.backend.enterprise.FeatureCapabilityService
 import ai.orchestree.backend.enterprise.TierLevel
+import ai.orchestree.backend.governance.EmergencySwarmBrake
 import ai.orchestree.backend.intelligence.RiskEngine
 import ai.orchestree.backend.orchestration.approval.ApprovalNotificationService
 import ai.orchestree.backend.orchestration.approval.HumanInTheLoopGate
@@ -97,6 +98,28 @@ class AiActionOrchestrator(
         assignedHuman: String = "admin"
     ): ActionProposalResult = withContext(Dispatchers.IO) {
         val passedChecks = mutableListOf<String>()
+
+        // 0. EMERGENCY SWARM BRAKE CHECK: Block if platform or tenant swarm is frozen
+        if (EmergencySwarmBrake.isSwarmFrozen(tenantId)) {
+            val rejected = ApprovedAction(
+                tenantId = tenantId,
+                agentId = agentId,
+                actionType = actionType,
+                targetSystem = targetSystem,
+                payload = payload,
+                assignedHuman = assignedHuman,
+                status = "REJECTED",
+                executionResult = "Emergency Swarm Brake active: all autonomous AI actions frozen"
+            )
+            actionsStore[rejected.id] = rejected
+            return@withContext ActionProposalResult(
+                action = rejected,
+                isApproved = false,
+                requiresHumanApproval = false,
+                rejectionReason = "SWARM_FROZEN_BY_EMERGENCY_BRAKE",
+                checksPassed = emptyList()
+            )
+        }
 
         // 1. POLICY CHECK: Verify tenant policy / feature capability
         // Note: ai_action_orchestration is ALL_TIER (minTierLevel = 1)
@@ -287,9 +310,9 @@ class AiActionOrchestrator(
      * - Records audit log 'ai_action_executed' and dispatches notification to assignedHuman.
      */
     suspend fun executeApprovedAction(action: ApprovedAction): ActionExecutionResult = withContext(Dispatchers.IO) {
-        require(action.status == "APPROVED") { "Cannot execute action ${action.id} with status ${action.status}; must be APPROVED" }
-
         val tenantId = action.tenantId
+        EmergencySwarmBrake.assertSwarmActive(tenantId)
+        require(action.status == "APPROVED") { "Cannot execute action ${action.id} with status ${action.status}; must be APPROVED" }
         val isEnterprise = try {
             FeatureCapabilityService.getTenantTier(tenantId).level >= TierLevel.ENTERPRISE.level
         } catch (_: Exception) { false }

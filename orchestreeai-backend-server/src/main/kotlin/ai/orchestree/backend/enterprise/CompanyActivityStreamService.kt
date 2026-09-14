@@ -24,6 +24,14 @@ object CompanyActivityStreamService {
     private val inMemoryStream = ConcurrentHashMap<String, CopyOnWriteArrayList<EnterpriseActivityStreamItem>>()
 
     /**
+     * Synchronous in-memory access for quick context resolution.
+     */
+    fun getRecentActivitiesSync(tenantId: String, limit: Int = 20): List<EnterpriseActivityStreamItem> {
+        val inMem = inMemoryStream[tenantId] ?: inMemoryStream["tenant-default"] ?: emptyList()
+        return inMem.take(limit)
+    }
+
+    /**
      * Publish an activity event into company_activity_stream AND reuse AuditLogger.
      */
     suspend fun publishActivity(

@@ -2,6 +2,7 @@ package ai.orchestree.backend.intelligence
 
 import ai.orchestree.backend.enterprise.AiDataPermissionService
 import ai.orchestree.backend.enterprise.CompanyContextFabricService
+import ai.orchestree.backend.governance.EmergencySwarmBrake
 import ai.orchestree.backend.learning.ContinuousLearningCore
 import ai.orchestree.backend.memory.MemoryConsolidator
 import ai.orchestree.backend.modelrouter.ModelRouteRequest
@@ -56,6 +57,7 @@ class AiCognitiveLoop(
         agentId: String = "agent-chief-of-staff",
         callerRole: String = "EXECUTIVE"
     ): AiCognitiveLoopResult {
+        EmergencySwarmBrake.assertSwarmActive(tenantId)
         logger.info("[COGNITIVE_LOOP] Starting 10-stage cognitive cycle for tenant=$tenantId entity=$entityReference")
         val stages = mutableListOf<CognitiveLoopStepResult>()
 

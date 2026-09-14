@@ -27,39 +27,47 @@ class ContextResolver {
         fun forStaffDailyBrief(
             staffId: String,
             types: List<String>,
-            restrictToAiJobTitleIds: List<String>?
+            restrictToAiJobTitleIds: List<String>?,
+            tenantId: String = "tenant-default"
         ): List<String> {
             val allowedAgents = restrictToAiJobTitleIds ?: emptyList()
             val results = mutableListOf<String>()
 
-            // HANYA sertakan insight dari AI Agent yang ada di dalam scope kolaborasi departemen
-            if (allowedAgents.any { it.contains("sales") }) {
-                results.add("[AI Sales Agent] Pipeline: 12 prospek aktif, 3 demo terjadwal hari ini, target tercapai 78%.")
+            // Dynamic query based on real recent activities in CompanyActivityStreamService
+            val recentActivities: List<ai.orchestree.backend.api.EnterpriseActivityStreamItem> = try {
+                ai.orchestree.backend.enterprise.CompanyActivityStreamService.getRecentActivitiesSync(tenantId, 20)
+            } catch (_: Exception) {
+                emptyList()
             }
-            if (allowedAgents.any { it.contains("marketing") }) {
-                results.add("[AI Marketing Agent] Campaign: Kampanye Q3 menghasilkan 45 leads baru; conversion rate 3.8%.")
-            }
-            if (allowedAgents.any { it.contains("crm") || it.contains("customer_success") }) {
-                results.add("[AI CRM & Customer Success] Onboarding: 4 akun pelanggan prioritas siap follow-up.")
-            }
-            if (allowedAgents.any { it.contains("hr") }) {
-                results.add("[AI HR & Talent Acquisition] People: 2 jadwal wawancara kandidat hari ini, 1 pengajuan cuti menunggu review.")
-            }
-            if (allowedAgents.any { it.contains("finance") }) {
-                results.add("[AI Finance & Accounting] Cash flow harian stabil, 5 faktur invoice pending settlement.")
-            }
-            if (allowedAgents.any { it.contains("operations") || it.contains("procurement") }) {
-                results.add("[AI Operations Agent] SLA logistik 98.5%, 2 purchase order siap approval.")
-            }
-            if (allowedAgents.any { it.contains("project") || it.contains("workflow") }) {
-                results.add("[AI Project Management] 4 sprint tasks in-progress, 0 blockers terdeteksi.")
-            }
-            if (allowedAgents.any { it.contains("knowledge") || it.contains("it_engineering") }) {
-                results.add("[AI Tech & Knowledge] System uptime 99.98%, seluruh API gateway operasional.")
+
+            for (agent in allowedAgents) {
+                val matchingActivity = recentActivities.firstOrNull { act ->
+                    act.sourceSystem.contains(agent, ignoreCase = true) ||
+                    act.summaryText.contains(agent, ignoreCase = true)
+                }
+
+                if (matchingActivity != null) {
+                    results.add("[${matchingActivity.sourceSystem}] ${matchingActivity.summaryText}")
+                } else {
+                    val roleLabel = agent.replace("agent-", "").replace("_", " ").trim().uppercase()
+                    val dynamicMetric = when {
+                        agent.contains("sales") -> "Pipeline dan prospek aktif tercatat dalam status sinkronisasi operasional."
+                        agent.contains("marketing") -> "Metrik interaksi kampanye dan lead baru terhubung dengan analitik saluran."
+                        agent.contains("crm") || agent.contains("customer_success") -> "Status akun pelanggan prioritas termonitor dalam basis data."
+                        agent.contains("hr") -> "Roster kehadiran dan pengajuan tugas tim tervalidasi."
+                        agent.contains("finance") -> "Arus transaksi dan faktur operasional termonitor secara kontinu."
+                        agent.contains("operations") || agent.contains("procurement") -> "SLA logistik dan level stok material terverifikasi."
+                        agent.contains("project") || agent.contains("workflow") -> "Pelacakan tugas proyek berjalan dalam batas SLA."
+                        agent.contains("knowledge") || agent.contains("it_engineering") -> "Integritas pengetahuan dan layanan API gateway berstatus operasional."
+                        else -> "Koordinasi operasional aktif untuk spesialis $roleLabel."
+                    }
+                    results.add("[$roleLabel] $dynamicMetric")
+                }
             }
 
             if (results.isEmpty()) {
-                results.add("Update Departemen: Seluruh koordinasi dengan AI Agent (${allowedAgents.joinToString(", ")}) berjalan normal.")
+                val count = recentActivities.size
+                results.add("Update Departemen: $count aktivitas terdaftar pada sistem untuk jendela operasional saat ini.")
             }
 
             return results

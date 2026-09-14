@@ -673,6 +673,30 @@ fun Route.enterpriseRoutes() {
             call.respond(HttpStatusCode.OK, updated)
         }
 
+        // Swarm Status & Tenant Emergency Brake (PRD Addendum 2 / Platform Governance)
+        get("/swarm/status") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val status = ai.orchestree.backend.governance.EmergencySwarmBrake.getStatus(tenantId)
+            call.respond(HttpStatusCode.OK, status)
+        }
+
+        post("/swarm/freeze") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val body = try { call.receive<Map<String, String>>() } catch (_: Exception) { emptyMap<String, String>() }
+            val operator = body["operator"] ?: "tenant-admin"
+            val reason = body["reason"] ?: "Tenant-level emergency brake requested"
+            val detail = ai.orchestree.backend.governance.EmergencySwarmBrake.freezeTenant(tenantId, operator, reason)
+            call.respond(HttpStatusCode.OK, mapOf("status" to "FROZEN", "detail" to detail))
+        }
+
+        post("/swarm/resume") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val body = try { call.receive<Map<String, String>>() } catch (_: Exception) { emptyMap<String, String>() }
+            val operator = body["operator"] ?: "tenant-admin"
+            val resumed = ai.orchestree.backend.governance.EmergencySwarmBrake.resumeTenant(tenantId, operator)
+            call.respond(HttpStatusCode.OK, mapOf("status" to "RESUMED", "success" to resumed))
+        }
+
         // AI Chief of Staff Briefings (PRD Addendum 2 Bagian 73, 78.1)
         get("/chief-of-staff/briefings") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
