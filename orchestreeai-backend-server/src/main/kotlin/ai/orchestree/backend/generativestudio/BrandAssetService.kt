@@ -30,8 +30,11 @@ class BrandAssetService(
      * ZERO pemanggilan LLM/Image Provider di fungsi ini SAMA SEKALI.
      */
     suspend fun uploadBrandLogo(tenantId: String, fileBytes: ByteArray, fileName: String): BrandAssetResult {
+        // Strip EXIF and camera telemetry to guarantee privacy and payload efficiency
+        val sanitizedBytes = MetadataStripper.sanitizeImageForPublishing(fileBytes, fileName)
+
         // Compute SHA-256 to guarantee deterministic byte-by-byte integrity
-        val digest = MessageDigest.getInstance("SHA-256").digest(fileBytes)
+        val digest = MessageDigest.getInstance("SHA-256").digest(sanitizedBytes)
         val sha256 = digest.joinToString("") { "%02x".format(it) }
 
         val safeName = fileName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
@@ -43,8 +46,8 @@ class BrandAssetService(
             else -> "image/png"
         }
 
-        // Upload mentah, apa adanya ke Object Storage
-        supabase.uploadStorageObject("brand-assets", storagePath, fileBytes, contentType)
+        // Upload sanitized asset to Object Storage
+        supabase.uploadStorageObject("brand-assets", storagePath, sanitizedBytes, contentType)
         val publicUrl = supabase.getStoragePublicUrl("brand-assets", storagePath)
 
         // Upsert deterministik ke brand_asset_overlays
