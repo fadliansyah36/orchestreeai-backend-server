@@ -85,6 +85,9 @@ class Fase2B3VerificationTest {
         assertTrue(result.isApproved, "Low-risk action should be auto-approved")
         assertFalse(result.requiresHumanApproval, "Low-risk action does not require human escalation")
         assertEquals("APPROVED", result.action.status)
+        println("=== RAW 4-LAYER CHECK PASSED ===")
+        println("Checks: " + result.checksPassed)
+        println("Status: " + result.action.status)
         assertTrue(result.checksPassed.contains("POLICY_CHECK"))
         assertTrue(result.checksPassed.contains("PERMISSION_CHECK"))
         assertTrue(result.checksPassed.contains("APPROVAL_REQUIREMENT_CHECK"))
@@ -153,6 +156,11 @@ class Fase2B3VerificationTest {
         val execResult = actionOrchestrator.executeApprovedAction(approved)
         assertEquals("SUCCESS", execResult.status)
         assertTrue(execResult.executionSummary.contains("Internal Task Board"))
+        println("=== RAW AUDIT RECORD ai_action_executed ===")
+        println("Action ID: " + approved.id)
+        println("Status: " + execResult.status)
+        println("Summary: " + execResult.executionSummary)
+        println("Assigned Human: " + approved.assignedHuman)
     }
 
     @Test
@@ -254,6 +262,11 @@ class Fase2B3VerificationTest {
         val ticked5 = ticked5List.firstOrNull { it.id == loop.id }
         assertEquals(MonitoringLoopState.RESOLVED, ticked5?.state)
         assertNotNull(ticked5?.sourceVerifiedAt)
+        println("=== RAW MONITORING LOOP TRANSITION HISTORY ===")
+        for (evt in monitoringEngine.transitionHistory.filter { it.loopId == loop.id }) {
+            println("Transition: " + evt.fromState + " -> " + evt.toState + " | Detail: " + evt.detail)
+        }
+        println("Final Verified At: " + ticked5?.sourceVerifiedAt)
     }
 
     @Test

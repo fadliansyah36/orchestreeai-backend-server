@@ -264,4 +264,43 @@ object AiDataPermissionService {
         val tenantMap = policiesStore[tenantId]
         return tenantMap?.values?.toList() ?: emptyList()
     }
+
+    /**
+     * PRD Addendum 2 Bagian 78.2: RBAC/ABAC Enterprise Workforce Capability Matrix
+     */
+    enum class EnterpriseCapability {
+        VIEW_ACTIVITY_STREAM,
+        QUERY_CONTEXT_FABRIC,
+        EXECUTE_MANAGEMENT_QUERY,
+        VIEW_DAILY_REPORTS,
+        MANAGE_KNOWLEDGE_RULES,
+        DISPATCH_AI_EVENTS,
+        ACCESS_CHIEF_OF_STAFF_BRIEFINGS,
+        CREATE_RESEARCH_DIRECTIVES,
+        VIEW_AGENT_SKILL_CONFIDENCE,
+        VIEW_DATA_QUALITY_ISSUES,
+        EVALUATE_PROJECT_HEALTH,
+        INITIATE_MULTI_AGENT_COLLABORATION,
+        VIEW_ROLE_BASED_EXPLAINABILITY
+    }
+
+    fun hasCapability(role: String, capability: EnterpriseCapability): Boolean {
+        val r = role.uppercase()
+        return when (capability) {
+            EnterpriseCapability.VIEW_ACTIVITY_STREAM -> true
+            EnterpriseCapability.QUERY_CONTEXT_FABRIC -> true
+            EnterpriseCapability.EXECUTE_MANAGEMENT_QUERY -> true
+            EnterpriseCapability.VIEW_DAILY_REPORTS -> true
+            EnterpriseCapability.MANAGE_KNOWLEDGE_RULES -> r in listOf("TENANT_ADMIN", "ADMIN", "OWNER", "EXECUTIVE")
+            EnterpriseCapability.DISPATCH_AI_EVENTS -> true
+            EnterpriseCapability.ACCESS_CHIEF_OF_STAFF_BRIEFINGS -> r in listOf("TENANT_ADMIN", "ADMIN", "OWNER", "EXECUTIVE", "MANAGER")
+            EnterpriseCapability.CREATE_RESEARCH_DIRECTIVES -> r in listOf("TENANT_ADMIN", "ADMIN", "OWNER", "EXECUTIVE", "MANAGER")
+            EnterpriseCapability.VIEW_AGENT_SKILL_CONFIDENCE -> true
+            EnterpriseCapability.VIEW_DATA_QUALITY_ISSUES -> true
+            EnterpriseCapability.EVALUATE_PROJECT_HEALTH -> true
+            EnterpriseCapability.INITIATE_MULTI_AGENT_COLLABORATION -> true
+            EnterpriseCapability.VIEW_ROLE_BASED_EXPLAINABILITY -> true
+        }
+    }
+
 }
