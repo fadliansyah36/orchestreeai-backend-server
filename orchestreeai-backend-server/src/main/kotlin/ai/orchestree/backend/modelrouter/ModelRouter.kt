@@ -10,6 +10,7 @@ import ai.orchestree.backend.modelrouter.providers.GeminiLlmClient
 import ai.orchestree.backend.modelrouter.providers.GptImage2Client
 import ai.orchestree.backend.modelrouter.providers.OpenAiCompatibleLlmClient
 import ai.orchestree.backend.resilience.executeWithRetry
+import ai.orchestree.backend.security.PromptInjectionGuard
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -43,6 +44,7 @@ class ModelRouter(
     private val logger = LoggerFactory.getLogger(ModelRouter::class.java)
 
     private val promptCache = PromptCacheManager()
+    private val promptGuard = PromptInjectionGuard()
     private val coalescer = ConcurrentRequestCoalescer<Result<LlmResponse>>()
     private val tieringEngine = ModelTieringEngine(providerRepo, modelRepo)
 
@@ -126,6 +128,13 @@ class ModelRouter(
     }
 
     suspend fun execute(request: ModelRouteRequest): Result<LlmResponse> = withContext(Dispatchers.IO) {
+        // 0. Security Guard against Prompt Injection
+        val (isSafe, blockReason) = promptGuard.inspect(request.prompt)
+        if (!isSafe) {
+            logger.warn("ModelRouter blocked prompt injection: $blockReason")
+            return@withContext Result.failure(SecurityException(blockReason ?: "Prompt rejected by PromptInjectionGuard"))
+        }
+
         // 1. Check Prompt Cache
         val cached = promptCache.get(request.prompt, request.systemInstruction)
         if (cached != null) {

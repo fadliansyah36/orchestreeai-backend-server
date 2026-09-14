@@ -52,8 +52,9 @@ open class TenantRepository(
                 val jdbcUrl = if (!dbUrl.startsWith("jdbc:")) "jdbc:$dbUrl" else dbUrl
                 Class.forName("org.postgresql.Driver")
                 DriverManager.getConnection(jdbcUrl).use { conn ->
-                    val stmt = conn.createStatement()
-                    val rs = stmt.executeQuery("SELECT id FROM tenants WHERE status = 'ACTIVE'")
+                    val stmt = conn.prepareStatement("SELECT id FROM tenants WHERE status = ?")
+                    stmt.setString(1, "ACTIVE")
+                    val rs = stmt.executeQuery()
                     val ids = mutableListOf<String>()
                     while (rs.next()) {
                         ids.add(rs.getString("id"))

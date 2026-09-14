@@ -316,8 +316,9 @@ open class LlmProviderModelRepository(
             val jdbcUrl = if (!dbUrl.startsWith("jdbc:")) "jdbc:$dbUrl" else dbUrl
             Class.forName("org.postgresql.Driver")
             DriverManager.getConnection(jdbcUrl).use { conn ->
-                val stmt = conn.createStatement()
-                val rs = stmt.executeQuery("SELECT id, provider_id, provider_code, model_identifier, complexity_tier, context_window, supports_tool_calling, supports_vision, is_active FROM llm_provider_models WHERE is_active = true")
+                val query = "SELECT id, provider_id, provider_code, model_identifier, complexity_tier, context_window, supports_tool_calling, supports_vision, is_active FROM llm_provider_models WHERE is_active = true"
+                val stmt = conn.prepareStatement(query)
+                val rs = stmt.executeQuery()
                 var found = false
                 while (rs.next()) {
                     val entity = LlmProviderModelEntity(

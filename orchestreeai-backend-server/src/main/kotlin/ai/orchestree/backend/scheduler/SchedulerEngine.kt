@@ -18,6 +18,7 @@ import ai.orchestree.backend.scheduler.jobs.ScheduledSelectionAnalysisJob
 import ai.orchestree.backend.scheduler.jobs.SyncNvidiaNimCatalogJob
 import ai.orchestree.backend.scheduler.jobs.TrialExpiryJob
 import ai.orchestree.backend.scheduler.jobs.CreditExpirationJob
+import ai.orchestree.backend.scheduler.jobs.HealthCheckJob
 import ai.orchestree.backend.scheduler.jobs.MonitoringLoopJob
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +48,7 @@ class SchedulerEngine(
     private val competitorCrawlJob: CompetitorCrawlJob = CompetitorCrawlJob(modelRouter),
     private val trialExpiryJob: TrialExpiryJob = TrialExpiryJob(),
     private val healthCheckEngine: HealthCheckEngine = HealthCheckEngine(modelRouter),
+    private val healthCheckJob: HealthCheckJob = HealthCheckJob(healthCheckEngine),
     private val confidenceCalibrationJob: ConfidenceCalibrationJob = ConfidenceCalibrationJob(),
     private val memoryDecayJob: MemoryDecayJob = MemoryDecayJob(),
     val paymentReconciliationJob: PaymentReconciliationJob = PaymentReconciliationJob(),
@@ -162,7 +164,7 @@ class SchedulerEngine(
         activeJobs["HEALTH_CHECK"] = scope.launch {
             while (isActive) {
                 executeWithDlq(jobType = "HEALTH_CHECK", tenantId = null, payload = emptyMap()) {
-                    val healthResults = healthCheckEngine.checkAll()
+                    val healthResults = healthCheckJob.execute()
                     val healthyCount = healthResults.count { it.isHealthy }
                     "$healthyCount/${healthResults.size} providers healthy"
                 }
@@ -402,6 +404,10 @@ class SchedulerEngine(
                 "MEMORY_DECAY" -> memoryDecayJob.execute(tenantId)
                 "PAYMENT_RECONCILIATION" -> paymentReconciliationJob.execute()
                 "SCHEDULED_SELECTION_ANALYSIS", "AUTO_SELECTION_BATCH" -> scheduledSelectionJob.execute(tenantId, payload)
+                "CREDIT_EXPIRATION" -> {
+                    val count = creditExpirationJob.execute()
+                    "Expired subscription balances for $count tenant(s)"
+                }
                 else -> throw IllegalArgumentException("Cannot reprocess unsupported job type: ${record.jobType}")
             }
 

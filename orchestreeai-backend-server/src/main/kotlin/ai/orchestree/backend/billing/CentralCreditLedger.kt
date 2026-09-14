@@ -219,8 +219,60 @@ class CentralCreditLedgerService(
         referenceType: String,
         referenceId: String? = null
     ): CreditReservation {
-        val currentBalance = getBalance(tenantId)
-        val currentlyReserved = activeReservations.values
+        // Enforce database-level row lock (SELECT ... FOR UPDATE) to prevent race condition across distributed pods
+        val conn = getDbConnection()
+        var dbBalance: Double? = null
+        if (conn != null) {
+            try {
+                conn.use { c ->
+                    c.autoCommit = false
+                    try {
+                        val psSelect = c.prepareStatement(
+                            "SELECT subscription_balance, bonus_balance, topup_balance, reserved_balance FROM ai_credit_wallets WHERE tenant_id = ? FOR UPDATE"
+                        )
+                        psSelect.setString(1, tenantId)
+                        val rs = psSelect.executeQuery()
+                        if (rs.next()) {
+                            val subBal = rs.getDouble("subscription_balance")
+                            val bonusBal = rs.getDouble("bonus_balance")
+                            val topBal = rs.getDouble("topup_balance")
+                            val dbReserved = rs.getDouble("reserved_balance")
+                            dbBalance = (subBal + bonusBal + topBal) - dbReserved
+                        }
+                        rs.close()
+                        psSelect.close()
+
+                        if (dbBalance != null) {
+                            if (dbBalance!! < estimatedCredits) {
+                                c.rollback()
+                                throw InsufficientCreditException(
+                                    "Saldo kredit tenant $tenantId tidak mencukupi (DB Lock). Tersedia: $dbBalance, Dibutuhkan reservasi: $estimatedCredits"
+                                )
+                            }
+                            // Update reserved_balance in database under lock
+                            val psUpdate = c.prepareStatement(
+                                "UPDATE ai_credit_wallets SET reserved_balance = reserved_balance + ?, updated_at = now() WHERE tenant_id = ?"
+                            )
+                            psUpdate.setDouble(1, estimatedCredits)
+                            psUpdate.setString(2, tenantId)
+                            psUpdate.executeUpdate()
+                            psUpdate.close()
+                            c.commit()
+                        }
+                    } catch (e: Exception) {
+                        c.rollback()
+                        if (e is InsufficientCreditException) throw e
+                        logger.warn("[CREDIT_LEDGER] DB row-level lock failed during reserve, falling back to synchronized memory: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                if (e is InsufficientCreditException) throw e
+                logger.warn("[CREDIT_LEDGER] DB connection failed during reserve: ${e.message}")
+            }
+        }
+
+        val currentBalance = dbBalance ?: getBalance(tenantId)
+        val currentlyReserved = if (dbBalance != null) 0.0 else activeReservations.values
             .filter { it.tenantId == tenantId && it.status == "RESERVED" }
             .sumOf { it.estimatedCredits }
         val available = currentBalance - currentlyReserved
@@ -250,7 +302,7 @@ class CentralCreditLedgerService(
             balanceAfter = available - estimatedCredits
         )
         ledgerEntries.add(entry)
-        logger.info("[CREDIT_LEDGER] Reserved $estimatedCredits credits for tenant $tenantId (Reservation: ${reservation.id})")
+        logger.info("[CREDIT_LEDGER] Reserved $estimatedCredits credits for tenant $tenantId (Reservation: ${reservation.id}, Row-Lock: ${conn != null})")
         return reservation
     }
 
@@ -275,18 +327,20 @@ class CentralCreditLedgerService(
                     c.autoCommit = false
                     try {
                         var remaining = actualCredits
-                        val psSelect = c.prepareStatement("SELECT subscription_balance, bonus_balance, topup_balance, used_balance FROM ai_credit_wallets WHERE tenant_id = ? FOR UPDATE")
+                        val psSelect = c.prepareStatement("SELECT subscription_balance, bonus_balance, topup_balance, used_balance, reserved_balance FROM ai_credit_wallets WHERE tenant_id = ? FOR UPDATE")
                         psSelect.setString(1, tenantId)
                         val rs = psSelect.executeQuery()
                         var subBal = 0.0
                         var bonusBal = 0.0
                         var topBal = 0.0
                         var usedBal = 0.0
+                        var reservedBal = 0.0
                         if (rs.next()) {
                             subBal = rs.getDouble("subscription_balance")
                             bonusBal = rs.getDouble("bonus_balance")
                             topBal = rs.getDouble("topup_balance")
                             usedBal = rs.getDouble("used_balance")
+                            reservedBal = rs.getDouble("reserved_balance")
                         }
                         rs.close()
                         psSelect.close()
@@ -298,18 +352,20 @@ class CentralCreditLedgerService(
                         val topDeduct = minOf(topBal, remaining)
                         remaining -= topDeduct
 
-                        val newSub = subBal - subDeduct
-                        val newBonus = bonusBal - bonusDeduct
-                        val newTop = topBal - topDeduct
+                        val newSub = (subBal - subDeduct).coerceAtLeast(0.0)
+                        val newBonus = (bonusBal - bonusDeduct).coerceAtLeast(0.0)
+                        val newTop = (topBal - topDeduct).coerceAtLeast(0.0)
                         val newUsed = usedBal + actualCredits
                         val newBalance = newSub + newBonus + newTop
+                        val newReserved = (reservedBal - reservation.estimatedCredits).coerceAtLeast(0.0)
 
-                        c.prepareStatement("UPDATE ai_credit_wallets SET subscription_balance = ?, bonus_balance = ?, topup_balance = ?, used_balance = ?, updated_at = now() WHERE tenant_id = ?").use { psUpdate ->
+                        c.prepareStatement("UPDATE ai_credit_wallets SET subscription_balance = ?, bonus_balance = ?, topup_balance = ?, used_balance = ?, reserved_balance = ?, updated_at = now() WHERE tenant_id = ?").use { psUpdate ->
                             psUpdate.setDouble(1, newSub)
                             psUpdate.setDouble(2, newBonus)
                             psUpdate.setDouble(3, newTop)
                             psUpdate.setDouble(4, newUsed)
-                            psUpdate.setString(5, tenantId)
+                            psUpdate.setDouble(5, newReserved)
+                            psUpdate.setString(6, tenantId)
                             psUpdate.executeUpdate()
                         }
 
@@ -371,6 +427,41 @@ class CentralCreditLedgerService(
         val reservation = activeReservations[reservationId] ?: return
         reservation.status = "RELEASED"
         activeReservations.remove(reservationId)
+
+        val conn = getDbConnection()
+        if (conn != null) {
+            try {
+                conn.use { c ->
+                    c.autoCommit = false
+                    try {
+                        val psSelect = c.prepareStatement(
+                            "SELECT reserved_balance FROM ai_credit_wallets WHERE tenant_id = ? FOR UPDATE"
+                        )
+                        psSelect.setString(1, reservation.tenantId)
+                        val rs = psSelect.executeQuery()
+                        if (rs.next()) {
+                            val curReserved = rs.getDouble("reserved_balance")
+                            val newReserved = (curReserved - reservation.estimatedCredits).coerceAtLeast(0.0)
+                            c.prepareStatement(
+                                "UPDATE ai_credit_wallets SET reserved_balance = ?, updated_at = now() WHERE tenant_id = ?"
+                            ).use { psUp ->
+                                psUp.setDouble(1, newReserved)
+                                psUp.setString(2, reservation.tenantId)
+                                psUp.executeUpdate()
+                            }
+                        }
+                        rs.close()
+                        psSelect.close()
+                        c.commit()
+                    } catch (ex: Exception) {
+                        c.rollback()
+                        logger.warn("[CREDIT_LEDGER] Failed to update reserved_balance in release: ${ex.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("[CREDIT_LEDGER] DB connection failed during release: ${e.message}")
+            }
+        }
 
         if (refundCredits > 0.0) {
             val balanceAfter = getBalance(reservation.tenantId)

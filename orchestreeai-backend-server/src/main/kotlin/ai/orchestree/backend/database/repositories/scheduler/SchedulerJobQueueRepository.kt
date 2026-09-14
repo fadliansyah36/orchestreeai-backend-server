@@ -31,25 +31,25 @@ class SchedulerJobQueueRepository {
     suspend fun ensureTableExists() = withContext(Dispatchers.IO) {
         val conn = DatabaseManager.getConnection() ?: return@withContext
         conn.use { c ->
-            c.createStatement().use { st ->
-                st.execute("""
-                    CREATE TABLE IF NOT EXISTS scheduler_job_queue (
-                        id VARCHAR(64) PRIMARY KEY,
-                        tenant_id VARCHAR(64),
-                        job_type VARCHAR(128) NOT NULL,
-                        payload TEXT DEFAULT '{}',
-                        status VARCHAR(32) NOT NULL DEFAULT 'pending',
-                        scheduled_at BIGINT NOT NULL,
-                        claimed_at BIGINT,
-                        claimed_by VARCHAR(128),
-                        completed_at BIGINT,
-                        execution_result TEXT,
-                        retry_count INT NOT NULL DEFAULT 0,
-                        created_at BIGINT NOT NULL
-                    );
-                    CREATE INDEX IF NOT EXISTS idx_scheduler_job_queue_status_sched 
-                    ON scheduler_job_queue (status, scheduled_at);
-                """.trimIndent())
+            c.prepareStatement("""
+                CREATE TABLE IF NOT EXISTS scheduler_job_queue (
+                    id VARCHAR(64) PRIMARY KEY,
+                    tenant_id VARCHAR(64),
+                    job_type VARCHAR(128) NOT NULL,
+                    payload TEXT DEFAULT '{}',
+                    status VARCHAR(32) NOT NULL DEFAULT 'pending',
+                    scheduled_at BIGINT NOT NULL,
+                    claimed_at BIGINT,
+                    claimed_by VARCHAR(128),
+                    completed_at BIGINT,
+                    execution_result TEXT,
+                    retry_count INT NOT NULL DEFAULT 0,
+                    created_at BIGINT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_scheduler_job_queue_status_sched 
+                ON scheduler_job_queue (status, scheduled_at);
+            """.trimIndent()).use { st ->
+                st.execute()
             }
         }
     }

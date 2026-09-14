@@ -180,6 +180,7 @@ fun Route.selectionRoutes() {
     val selectionRepo = SelectionRepository(supabase, modelRouter)
     val selectionEngine = SelectionEngine(supabase, modelRouter, selectionRepo)
     val autoSelectionRepo = AutoSelectionConfigRepository.defaultInstance
+    val promptGuard = ai.orchestree.backend.security.PromptInjectionGuard()
     val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     suspend fun ApplicationCall.requireTenantId(): String? {
@@ -264,6 +265,16 @@ fun Route.selectionRoutes() {
                 matchingConfig.defaultPrompt
             } else {
                 promptText
+            }
+
+            // Security check against Prompt Injection
+            val (isSafe, blockReason) = promptGuard.inspect(effectivePrompt)
+            if (!isSafe) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("error" to (blockReason ?: "Prompt injection detected in selection prompt"))
+                )
+                return@post
             }
             val effectiveCalibrationId = calibrationId ?: matchingConfig?.calibrationSettingsId
             val effectiveDomain = matchingConfig?.domainCategory ?: SelectionEngine.inferDomainFromPathOrPrompt("$folderPath/$fileName")

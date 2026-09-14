@@ -401,25 +401,27 @@ class PaymentReconciliationQueueRepository(
                         WHERE resolution_status = 'pending_review'
                         ORDER BY created_at DESC
                     """.trimIndent()
-                    val rs = c.createStatement().executeQuery(sql)
-                    val list = mutableListOf<PaymentReconciliationQueueItem>()
-                    while (rs.next()) {
-                        list.add(
-                            PaymentReconciliationQueueItem(
-                                id = rs.getString("id"),
-                                paymentId = rs.getString("payment_id"),
-                                orderId = rs.getString("order_id"),
-                                tenantId = rs.getString("tenant_id"),
-                                detectedIssue = rs.getString("detected_issue"),
-                                gatewayReportedStatus = rs.getString("gateway_reported_status"),
-                                localStatus = rs.getString("local_status"),
-                                resolutionStatus = rs.getString("resolution_status"),
-                                createdAt = rs.getLong("created_epoch"),
-                                resolvedAt = rs.getLong("resolved_epoch").takeIf { !rs.wasNull() }
+                    c.prepareStatement(sql).use { stmt ->
+                        val rs = stmt.executeQuery()
+                        val list = mutableListOf<PaymentReconciliationQueueItem>()
+                        while (rs.next()) {
+                            list.add(
+                                PaymentReconciliationQueueItem(
+                                    id = rs.getString("id"),
+                                    paymentId = rs.getString("payment_id"),
+                                    orderId = rs.getString("order_id"),
+                                    tenantId = rs.getString("tenant_id"),
+                                    detectedIssue = rs.getString("detected_issue"),
+                                    gatewayReportedStatus = rs.getString("gateway_reported_status"),
+                                    localStatus = rs.getString("local_status"),
+                                    resolutionStatus = rs.getString("resolution_status"),
+                                    createdAt = rs.getLong("created_epoch"),
+                                    resolvedAt = rs.getLong("resolved_epoch").takeIf { !rs.wasNull() }
+                                )
                             )
-                        )
+                        }
+                        if (list.isNotEmpty()) return@withContext list
                     }
-                    if (list.isNotEmpty()) return@withContext list
                 }
             } catch (e: Exception) {
                 logger.warn("Query DB failed: ${e.message}")

@@ -18,6 +18,7 @@ import ai.orchestree.backend.sales.SalesPersonaType
 import ai.orchestree.backend.conversation.SalesIntentClassifier
 import ai.orchestree.backend.conversation.SalesIntentCode
 import ai.orchestree.backend.channels.isolation.AudienceScope
+import ai.orchestree.backend.security.PromptInjectionGuard
 import kotlinx.serialization.Serializable
 import org.slf4j.LoggerFactory
 
@@ -41,9 +42,22 @@ class ChannelGateway(
     private val staffProfileRepo: StaffProfileRepository = StaffProfileRepository.defaultInstance
 ) {
     private val logger = LoggerFactory.getLogger(ChannelGateway::class.java)
+    private val promptGuard = PromptInjectionGuard()
 
     suspend fun processInbound(message: InboundMessage): OutboundMessage? {
         logger.info("Processing Inbound message from [${message.channelType}] sender: ${message.senderId} (tenant: ${message.tenantId})")
+
+        // 0. Security Guard against Prompt Injection & Jailbreak attempts
+        val (isSafe, blockReason) = promptGuard.inspect(message.text)
+        if (!isSafe) {
+            logger.warn("ChannelGateway blocked prompt injection attempt from ${message.senderId}: $blockReason")
+            return OutboundMessage(
+                tenantId = message.tenantId,
+                channelType = message.channelType,
+                recipientId = message.senderId,
+                text = "Maaf, pesan Anda tidak dapat diproses karena melanggar kebijakan keamanan sistem kami. Tim layanan pelanggan kami dapat membantu Anda secara langsung jika diperlukan."
+            )
+        }
 
         // Validasi Isolasi Audience Scope (Customer Facing vs Internal Staff)
         isolationEngine.validateAudienceScope(message.tenantId, message.channelType, message.senderId, AudienceScope.CUSTOMER_FACING)

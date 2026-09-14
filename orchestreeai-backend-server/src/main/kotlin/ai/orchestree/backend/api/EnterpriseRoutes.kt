@@ -193,6 +193,7 @@ fun Route.enterpriseRoutes() {
     val correlator = CrossSystemCorrelator()
     val chiefOfStaffService = ai.orchestree.backend.intelligence.ChiefOfStaffService(supabase, modelRouter)
     val auditLogger = ai.orchestree.backend.security.AuditLogger()
+    val promptGuard = ai.orchestree.backend.security.PromptInjectionGuard()
     val managementSessionCache = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>>()
 
     val aiActionOrchestrator = ai.orchestree.backend.orchestration.AiActionOrchestrator()
@@ -376,6 +377,26 @@ fun Route.enterpriseRoutes() {
             val userRole = req.role?.uppercase() ?: "EXECUTIVE"
             val agentId = req.agentId ?: "agent-chief-of-staff"
             val entity = req.entityFocus ?: "General"
+
+            // 0. Security Guard against Prompt Injection / Jailbreak
+            val (isSafe, blockReason) = promptGuard.inspect(req.question)
+            if (!isSafe) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    ManagementQueryResponse(
+                        question = req.question,
+                        answer = "QUERY DITOLAK: ${blockReason ?: "Prompt injection terdeteksi"}",
+                        confidence = 0.0,
+                        dataAvailability = "BLOCKED",
+                        sourcesUsed = emptyList(),
+                        sessionId = sessionId,
+                        turnCount = 1,
+                        accessRestricted = true,
+                        rolePersonalization = userRole
+                    )
+                )
+                return@post
+            }
 
             // 1. Data Access Control - ABAC & RBAC Enforcement (Bagian 66.3, 59)
             val abacCheck = ai.orchestree.backend.enterprise.AiDataPermissionService.checkAiDataPermission(

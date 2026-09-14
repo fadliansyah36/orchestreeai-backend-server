@@ -198,10 +198,9 @@ open class ProviderRegistryRepository(
                 Class.forName("org.postgresql.Driver")
                 DriverManager.getConnection(jdbcUrl).use { conn ->
                     // 1. Sync llm_providers
-                    val stmt = conn.createStatement()
-                    val rs = stmt.executeQuery(
-                        "SELECT * FROM llm_providers WHERE is_enabled = true ORDER BY fallback_priority ASC"
-                    )
+                    val query = "SELECT * FROM llm_providers WHERE is_enabled = true ORDER BY fallback_priority ASC"
+                    val stmt = conn.prepareStatement(query)
+                    val rs = stmt.executeQuery()
                     val metaLlm = rs.metaData
                     val colsLlm = (1..metaLlm.columnCount).map { metaLlm.getColumnName(it).lowercase() }.toSet()
                     var foundLlm = false

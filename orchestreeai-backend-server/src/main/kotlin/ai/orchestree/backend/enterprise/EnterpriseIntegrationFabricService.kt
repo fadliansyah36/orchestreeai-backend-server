@@ -305,8 +305,41 @@ object EnterpriseIntegrationFabricService {
     }
 
     fun listIngestedRecords(tenantId: String, recordType: String? = null): List<IngestedRecord> {
-        return ingestedRecordsStore.values.filter { 
+        val inMem = ingestedRecordsStore.values.filter { 
             it.tenantId == tenantId && (recordType == null || it.recordType.equals(recordType, ignoreCase = true))
         }
+        if (inMem.isNotEmpty()) return inMem
+
+        val list = mutableListOf<IngestedRecord>()
+        try {
+            DatabaseManager.getConnection()?.use { conn ->
+                val sql = if (recordType != null) {
+                    "SELECT id, connection_id, tenant_id, record_type, external_record_id, entity_reference, data_mode, normalized_payload FROM enterprise_ingested_records WHERE tenant_id = ? AND record_type = ?"
+                } else {
+                    "SELECT id, connection_id, tenant_id, record_type, external_record_id, entity_reference, data_mode, normalized_payload FROM enterprise_ingested_records WHERE tenant_id = ?"
+                }
+                conn.prepareStatement(sql).use { ps ->
+                    ps.setString(1, tenantId)
+                    if (recordType != null) ps.setString(2, recordType)
+                    ps.executeQuery().use { rs ->
+                        while (rs.next()) {
+                            val rec = IngestedRecord(
+                                id = rs.getString("id"),
+                                connectionId = rs.getString("connection_id"),
+                                tenantId = rs.getString("tenant_id"),
+                                recordType = rs.getString("record_type"),
+                                externalRecordId = rs.getString("external_record_id"),
+                                entityReference = rs.getString("entity_reference") ?: "",
+                                dataMode = rs.getString("data_mode") ?: "REAL_ERP",
+                                normalizedPayloadJson = rs.getString("normalized_payload") ?: "{}"
+                            )
+                            ingestedRecordsStore[rec.id] = rec
+                            list.add(rec)
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return list
     }
 }

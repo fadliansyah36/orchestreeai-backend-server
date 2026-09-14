@@ -37,7 +37,10 @@ class MemoryDocumentRepository(
     private val supabase: SupabaseClientProvider = SupabaseClientProvider.fromEnv()
 ) {
     private val logger = LoggerFactory.getLogger(MemoryDocumentRepository::class.java)
-    private val inMemoryStore = ConcurrentHashMap<String, CopyOnWriteArrayList<MemoryDocumentRecord>>()
+
+    companion object {
+        val inMemoryStore = ConcurrentHashMap<String, CopyOnWriteArrayList<MemoryDocumentRecord>>()
+    }
 
     private fun Map<String, Any?>.toSafeJson(): String {
         val entriesStr = entries.joinToString(",") { (k, v) ->
@@ -52,11 +55,49 @@ class MemoryDocumentRepository(
     }
 
     suspend fun getAllActive(tenantId: String? = null): List<MemoryDocumentRecord> = withContext(Dispatchers.IO) {
-        if (tenantId != null) {
+        val inMem = if (tenantId != null) {
             inMemoryStore[tenantId]?.filter { !it.isArchived } ?: emptyList()
         } else {
             inMemoryStore.values.flatten().filter { !it.isArchived }
         }
+        if (inMem.isNotEmpty()) return@withContext inMem
+
+        val dbList = mutableListOf<MemoryDocumentRecord>()
+        try {
+            ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                val sql = if (tenantId != null) {
+                    "SELECT id, tenant_id, source_type, title, content, tags, source_reference, relevance_weight, is_archived, importance_score, novelty_score, specificity_score FROM memory_documents WHERE tenant_id = ? AND is_archived = false"
+                } else {
+                    "SELECT id, tenant_id, source_type, title, content, tags, source_reference, relevance_weight, is_archived, importance_score, novelty_score, specificity_score FROM memory_documents WHERE is_archived = false"
+                }
+                conn.prepareStatement(sql).use { ps ->
+                    if (tenantId != null) ps.setString(1, tenantId)
+                    ps.executeQuery().use { rs ->
+                        while (rs.next()) {
+                            val rec = MemoryDocumentRecord(
+                                id = rs.getString("id"),
+                                tenantId = rs.getString("tenant_id"),
+                                sourceType = rs.getString("source_type") ?: "episodic",
+                                title = rs.getString("title") ?: "",
+                                content = rs.getString("content") ?: "",
+                                tags = rs.getString("tags") ?: "",
+                                sourceReference = rs.getString("source_reference") ?: "",
+                                relevanceWeight = rs.getDouble("relevance_weight"),
+                                isArchived = rs.getBoolean("is_archived"),
+                                importanceScore = rs.getDouble("importance_score"),
+                                noveltyScore = rs.getDouble("novelty_score"),
+                                specificityScore = rs.getDouble("specificity_score")
+                            )
+                            val list = inMemoryStore.computeIfAbsent(rec.tenantId) { CopyOnWriteArrayList() }
+                            list.add(rec)
+                            dbList.add(rec)
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        if (dbList.isNotEmpty()) return@withContext dbList
+        inMem
     }
 
     suspend fun updateRelevanceWeight(id: String, weight: Double): Boolean = withContext(Dispatchers.IO) {

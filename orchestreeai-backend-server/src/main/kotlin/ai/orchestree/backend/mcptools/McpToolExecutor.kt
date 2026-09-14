@@ -171,7 +171,40 @@ class McpToolExecutor(
                             """{"status": "BLOCKED", "message": "Circuit breaker tripped or rate limit exceeded on connection $connectionId"}"""
                         } else {
                             ai.orchestree.backend.enterprise.EnterpriseIntegrationFabricService.recordConnectionSuccess(connectionId)
-                            """{"status": "SYNCED", "connectionId": "$connectionId", "recordsSynced": 42, "timestamp": "${java.time.Instant.now()}"}"""
+                            val actualCount = try {
+                                var c = 0
+                                ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                                    conn.prepareStatement("SELECT count(*) FROM enterprise_ingested_records WHERE connection_id = ? OR tenant_id = ?").use { ps ->
+                                        ps.setString(1, connectionId)
+                                        ps.setString(2, tenantId)
+                                        ps.executeQuery().use { rs -> if (rs.next()) c = rs.getInt(1) }
+                                    }
+                                }
+                                c
+                            } catch (_: Exception) { 0 }
+                            """{"status": "SYNCED", "connectionId": "$connectionId", "recordsSynced": $actualCount, "timestamp": "${java.time.Instant.now()}"}"""
+                        }
+                    }
+                    "company_brain.query", "search_knowledge_base" -> {
+                        val q = params["query"]?.toString() ?: params["text"]?.toString() ?: ""
+                        val searchEngine = ai.orchestree.backend.memory.HybridMemorySearchEngine()
+                        val searchResult = searchEngine.search(tenantId = tenantId, query = q, enableReranking = true)
+                        val hits = searchResult.topResults.map { mapOf("id" to it.document.id, "title" to it.document.title, "content" to it.document.content, "score" to it.compositeScore) }
+                        """{"query": "${q.replace("\"", "\\\"")}", "resultsCount": ${hits.size}}"""
+                    }
+                    "web.fetch", "fetch_url" -> {
+                        val url = params["url"]?.toString() ?: ""
+                        if (url.isNotBlank()) {
+                            try {
+                                val client = java.net.http.HttpClient.newBuilder().connectTimeout(java.time.Duration.ofSeconds(5)).build()
+                                val req = java.net.http.HttpRequest.newBuilder().uri(java.net.URI(url)).timeout(java.time.Duration.ofSeconds(5)).GET().build()
+                                val resp = client.send(req, java.net.http.HttpResponse.BodyHandlers.ofString())
+                                """{"url": "$url", "statusCode": ${resp.statusCode()}, "bodyLength": ${resp.body().length}}"""
+                            } catch (e: Exception) {
+                                """{"url": "$url", "statusCode": 500, "error": "${e.message?.replace("\"", "'")}"}"""
+                            }
+                        } else {
+                            """{"error": "Missing URL parameter"}"""
                         }
                     }
                     else -> """{"result": "SUCCESS", "tool": "$toolName"}"""

@@ -215,13 +215,9 @@ class StartupValidator(
         val primaryKey = ai.orchestree.backend.config.EnvLoader.get(primary.apiKeyEnv)
         val env = ai.orchestree.backend.config.EnvLoader.get("APPLICATION_ENV", "development")
         if (primaryKey.isBlank() || primaryKey == "placeholder") {
-            if (env.equals("production", ignoreCase = true)) {
-                val errMsg = "Provider prioritas 1 [${primary.providerCode}] tidak memiliki kredensial yang valid (${primary.apiKeyEnv} kosong/placeholder). Server GAGAL startup untuk mencegah silent fallback ke Gemini."
-                logger.error("[STARTUP FATAL] $errMsg")
-                throw FatalConfigurationException(errMsg)
-            } else {
-                logger.warn("[STARTUP DEV] Provider prioritas 1 [${primary.providerCode}] tidak memiliki key di dev mode. Pengecekan dilanjutkan.")
-            }
+            val errMsg = "Provider prioritas 1 [${primary.providerCode}] tidak memiliki kredensial yang valid (${primary.apiKeyEnv} kosong/placeholder). Server GAGAL startup untuk mencegah silent fallback ke Gemini."
+            logger.error("[STARTUP FATAL] $errMsg")
+            throw FatalConfigurationException(errMsg)
         }
 
         val primaryCode = primary.providerCode.lowercase()

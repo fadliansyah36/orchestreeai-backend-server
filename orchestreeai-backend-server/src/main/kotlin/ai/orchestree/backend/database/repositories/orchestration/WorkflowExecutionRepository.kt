@@ -89,6 +89,32 @@ class WorkflowExecutionRepository(
         // 1. Try Direct JDBC (PostgreSQL / Supabase direct or pooler)
         try {
             getJdbcConnection()?.use { conn ->
+                // Ensure foreign key dependencies (tenant and workflow_definition) exist
+                try {
+                    conn.prepareStatement("""
+                        INSERT INTO tenants (id, name, domain, tier, status, monthly_llm_budget, used_llm_budget, created_at, updated_at, allow_public_web_research)
+                        VALUES (?, ?, 'example.com', 'ENTERPRISE', 'ACTIVE', 1000.0, 0.0, now(), now(), true)
+                        ON CONFLICT (id) DO NOTHING
+                    """.trimIndent()).use { tStmt ->
+                        tStmt.setString(1, execution.tenantId)
+                        tStmt.setString(2, "Tenant ${execution.tenantId}")
+                        tStmt.executeUpdate()
+                    }
+                    conn.prepareStatement("""
+                        INSERT INTO workflow_definitions (id, tenant_id, name, description, category, trigger_type, is_active, created_at)
+                        VALUES (?, ?, ?, 'Autonomous Workflow Definition', 'AUTOMATION', 'API', true, ?)
+                        ON CONFLICT (id) DO NOTHING
+                    """.trimIndent()).use { defStmt ->
+                        defStmt.setString(1, execution.workflowDefId)
+                        defStmt.setString(2, execution.tenantId)
+                        defStmt.setString(3, execution.workflowDefId)
+                        defStmt.setLong(4, System.currentTimeMillis())
+                        defStmt.executeUpdate()
+                    }
+                } catch (fkPrepErr: Exception) {
+                    logger.warn("Pre-populating tenant/workflow_definition notice: ${fkPrepErr.message}")
+                }
+
                 val sql = """
                     INSERT INTO workflow_executions (
                         id, tenant_id, workflow_def_id, trigger_source, input_payload,

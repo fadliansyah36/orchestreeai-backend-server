@@ -176,6 +176,20 @@ fun Route.chatRoutes() {
             }
 
             val userMessage = req.actualMessage.ifBlank { "Halo, silakan perkenalkan peran Anda." }
+            
+            // Validate against prompt injection / jailbreak
+            val (isSafe, blockReason) = promptGuard.inspect(userMessage)
+            if (!isSafe) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf(
+                        "status" to "failed",
+                        "error" to (blockReason ?: "Security policy violation: prompt injection detected")
+                    )
+                )
+                return@post
+            }
+
             val fullPrompt = "$agentPersona\nUser: $userMessage\nAssistant:"
             val startTime = System.currentTimeMillis()
             val tenant = req.tenantId.ifBlank { "tenant-default" }

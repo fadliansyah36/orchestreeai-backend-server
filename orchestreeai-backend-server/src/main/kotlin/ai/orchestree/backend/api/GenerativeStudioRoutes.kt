@@ -63,6 +63,7 @@ data class BrandLogoUploadRequest(
 )
 
 private val logger = org.slf4j.LoggerFactory.getLogger("ai.orchestree.backend.api.GenerativeStudioRoutes")
+private val promptGuard = ai.orchestree.backend.security.PromptInjectionGuard()
 
 fun Route.generativeStudioRoutes(
     brandAssetService: ai.orchestree.backend.generativestudio.BrandAssetService = ai.orchestree.backend.generativestudio.BrandAssetService.defaultInstance,
@@ -90,6 +91,16 @@ fun Route.generativeStudioRoutes(
                     aspectRatio = req.aspectRatio ?: "1:1"
                 )
                 composed.mainPrompt
+            }
+
+            // Security check against prompt injection
+            val (isSafe, blockReason) = promptGuard.inspect(finalPrompt)
+            if (!isSafe) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("status" to "failed", "error" to (blockReason ?: "Prompt injection detected"))
+                )
+                return@post
             }
 
             // 2. Dispatch via OrchestrationEngine (wf-marketing-campaign DAG) safely
@@ -153,6 +164,14 @@ fun Route.generativeStudioRoutes(
             if (!call.enforceEntitlementGate("generative_studio")) return@post
             val req = call.receive<CampaignCreativeRequest>()
             val tenantId = req.tenantId ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val (isSafe, blockReason) = promptGuard.inspect(req.topic)
+            if (!isSafe) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("status" to "failed", "error" to (blockReason ?: "Prompt injection detected in creative topic"))
+                )
+                return@post
+            }
             val plan = generativeStudioService.generateCampaignCreative(tenantId, req.topic, req.platform)
             call.respond(HttpStatusCode.OK, plan)
         }

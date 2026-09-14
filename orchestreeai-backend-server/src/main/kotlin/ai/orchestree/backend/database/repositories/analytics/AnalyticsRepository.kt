@@ -400,18 +400,19 @@ class AnalyticsRepository(
                           (SELECT COUNT(*) FROM (SELECT customer_id FROM orders WHERE LOWER(status) = 'paid' GROUP BY customer_id HAVING COUNT(*) > 1) rep) AS total_repeat_orders,
                           (SELECT COUNT(*) FROM orders WHERE LOWER(status) = 'paid') AS total_transactions;
                     """.trimIndent()
-                    val stmt = c.createStatement()
-                    val rs = stmt.executeQuery(sql)
-                    if (rs.next()) {
-                        return@withContext AnalyticsOverviewResponse(
-                            total_transaction_value = rs.getDouble("total_transaction_value"),
-                            total_revenue_this_month = rs.getDouble("total_revenue_this_month"),
-                            total_tenants_active = rs.getInt("total_tenants_active"),
-                            total_staff_human = rs.getInt("total_staff_human"),
-                            total_ai_agents_active = rs.getInt("total_ai_agents_active"),
-                            total_repeat_orders = rs.getInt("total_repeat_orders"),
-                            total_transactions = rs.getInt("total_transactions")
-                        )
+                    c.prepareStatement(sql).use { stmt ->
+                        val rs = stmt.executeQuery()
+                        if (rs.next()) {
+                            return@withContext AnalyticsOverviewResponse(
+                                total_transaction_value = rs.getDouble("total_transaction_value"),
+                                total_revenue_this_month = rs.getDouble("total_revenue_this_month"),
+                                total_tenants_active = rs.getInt("total_tenants_active"),
+                                total_staff_human = rs.getInt("total_staff_human"),
+                                total_ai_agents_active = rs.getInt("total_ai_agents_active"),
+                                total_repeat_orders = rs.getInt("total_repeat_orders"),
+                                total_transactions = rs.getInt("total_transactions")
+                            )
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -476,20 +477,21 @@ class AnalyticsRepository(
                           AND l.created_at >= date_trunc('month', now())
                         GROUP BY t.id, t.name, w.subscription_balance, w.topup_balance, w.bonus_balance;
                     """.trimIndent()
-                    val stmt = c.createStatement()
-                    val rs = stmt.executeQuery(sql)
-                    val result = mutableListOf<TenantUsageCreditItem>()
-                    while (rs.next()) {
-                        result.add(
-                            TenantUsageCreditItem(
-                                id = rs.getString("id"),
-                                name = rs.getString("name"),
-                                balance = rs.getDouble("balance"),
-                                total_usage_this_month = rs.getDouble("total_usage_this_month")
+                    c.prepareStatement(sql).use { stmt ->
+                        val rs = stmt.executeQuery()
+                        val result = mutableListOf<TenantUsageCreditItem>()
+                        while (rs.next()) {
+                            result.add(
+                                TenantUsageCreditItem(
+                                    id = rs.getString("id"),
+                                    name = rs.getString("name"),
+                                    balance = rs.getDouble("balance"),
+                                    total_usage_this_month = rs.getDouble("total_usage_this_month")
+                                )
                             )
-                        )
+                        }
+                        if (result.isNotEmpty()) return@withContext result
                     }
-                    if (result.isNotEmpty()) return@withContext result
                 }
             } catch (e: Exception) {
                 logger.warn("JDBC query failed for usage-credit: ${e.message}")

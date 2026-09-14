@@ -18,6 +18,9 @@ import ai.orchestree.backend.api.masterDataPublicRoutes
 import ai.orchestree.backend.api.masterDataTenantRoutes
 import ai.orchestree.backend.prospect.prospectPublicRoutes
 import ai.orchestree.backend.prospect.prospectAdminRoutes
+import ai.orchestree.backend.billing.CommercialCreditEngine
+import ai.orchestree.backend.billing.MidtransWebhookPayload
+import ai.orchestree.backend.database.repositories.payments.OrderRepository
 import ai.orchestree.backend.webhooks.PaymentNotification
 import ai.orchestree.backend.webhooks.PaymentWebhookHandler
 import ai.orchestree.backend.webhooks.TelegramWebhookHandler
@@ -125,11 +128,33 @@ fun Application.configureRouting() {
                         signatureKey = signatureKey
                     )
 
-                    val verified = paymentHandler.handlePaymentNotification(notif, serverKey)
+                    val verified = paymentHandler.processAndFulfillWithRetry(notif, serverKey) { fulfilledOrderId ->
+                        // 1. If it's a subscription payment, fulfill through CommercialCreditEngine
+                        runCatching {
+                            val commercialCreditEngine = CommercialCreditEngine()
+                            commercialCreditEngine.handleSubscriptionPaymentWebhook(
+                                MidtransWebhookPayload(
+                                    orderId = notif.orderId,
+                                    statusCode = notif.statusCode,
+                                    grossAmount = notif.grossAmount,
+                                    signatureKey = notif.signatureKey ?: "",
+                                    transactionStatus = notif.transactionStatus,
+                                    transactionId = "tx-wh-${notif.orderId.take(16)}"
+                                ),
+                                serverKey = serverKey
+                            )
+                        }
+                        // 2. If it's a commerce/omnichannel order, update Order status to PAID
+                        runCatching {
+                            val orderRepo = OrderRepository()
+                            orderRepo.updateStatus(fulfilledOrderId, "PAID")
+                        }
+                    }
+
                     if (!verified) {
                         call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Invalid payment webhook signature"))
                     } else {
-                        call.respond(HttpStatusCode.OK, mapOf("status" to "processed", "gateway" to gateway))
+                        call.respond(HttpStatusCode.OK, mapOf("status" to "processed", "order_id" to orderId, "gateway" to gateway))
                     }
                 }
             }
