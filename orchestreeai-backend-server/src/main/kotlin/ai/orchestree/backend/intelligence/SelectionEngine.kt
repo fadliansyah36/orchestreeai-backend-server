@@ -324,6 +324,8 @@ class SelectionEngine(
     /**
      * LANGKAH 2 — Prompt-only Selection via Company Brain (Hybrid Search PRD 17.2)
      */
+    private val promptGuard = ai.orchestree.backend.security.PromptInjectionGuard()
+
     suspend fun processPromptOnlySelection(
         selectionRequestId: String,
         tenantId: String,
@@ -331,6 +333,15 @@ class SelectionEngine(
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
             logger.info("Executing prompt-only selection for $selectionRequestId via Hybrid Search...")
+
+            // Guard against prompt injection
+            val (isSafe, blockReason) = promptGuard.inspect(promptText)
+            if (!isSafe) {
+                val errorMsg = blockReason ?: "Prompt injection detected in selection prompt"
+                selectionRepo.updateSelectionRequestStatus(selectionRequestId, "failed", tenantId)
+                return@withContext Result.failure(SecurityException(errorMsg))
+            }
+
             val docs = hybridSearchEngine.search(tenantId, promptText, topK = 10)
             val rows = docs.map { doc ->
                 mapOf(
@@ -340,12 +351,16 @@ class SelectionEngine(
                     "sourceType" to doc.sourceType
                 )
             }
+            val effectiveRows = if (rows.isNotEmpty()) {
+                rows
+            } else {
+                logger.info("Company Brain hybrid search returned empty documents for prompt. Synthesizing dynamic candidates using ModelRouter...")
+                synthesizeCandidateEntitiesFromPrompt(tenantId, promptText)
+            }
+
             val dataset = ExtractedDataset(
                 schema = mapOf("id" to "string", "title" to "string", "content" to "string", "sourceType" to "string"),
-                rows = if (rows.isNotEmpty()) rows else listOf(
-                    mapOf("id" to "seed-1", "title" to "Candidate / Vendor A", "content" to "Pengalaman 5 tahun, sertifikasi lengkap, track record teruji"),
-                    mapOf("id" to "seed-2", "title" to "Candidate / Vendor B", "content" to "Pengalaman 2 tahun, harga kompetitif, ketersediaan cepat")
-                )
+                rows = effectiveRows
             )
 
             executeAnalysisAndScoring(
@@ -366,6 +381,68 @@ class SelectionEngine(
             logger.error("Error in prompt only selection: ${e.message}", e)
             selectionRepo.updateSelectionRequestStatus(selectionRequestId, "failed", tenantId)
             Result.failure(e)
+        }
+    }
+
+    private suspend fun synthesizeCandidateEntitiesFromPrompt(tenantId: String, promptText: String): List<Map<String, String>> {
+        val synthesisPrompt = """
+            Pengguna meminta seleksi/evaluasi: "$promptText"
+            Karena basis data internal belum memiliki dokumen terkait, analisis instruksi tersebut dan ekstrak atau hasilkan 3 hingga 5 profil entitas/kandidat/opsi yang relevan, berimbang, dan realistis untuk dievaluasi.
+            Keluarkan HANYA JSON array tanpa markdown format. Contoh:
+            [
+              {"id": "cand-1", "title": "Opsi A", "content": "Rincian profil, kualifikasi teknis, penawaran komersial, dan SLA.", "sourceType": "ai_synthesized_prompt"}
+            ]
+        """.trimIndent()
+
+        val resp = modelRouter.execute(
+            ModelRouteRequest(
+                taskCategory = "COMPLEX_ANALYSIS",
+                prompt = synthesisPrompt,
+                tenantId = tenantId
+            )
+        )
+        val text = resp.getOrNull()?.text?.trim() ?: ""
+        val jsonStr = if (text.startsWith("```")) {
+            text.substringAfter("\n").substringBeforeLast("```").trim()
+        } else {
+            text
+        }
+
+        return try {
+            val parsed = kotlinx.serialization.json.Json.parseToJsonElement(jsonStr)
+            if (parsed is kotlinx.serialization.json.JsonArray && parsed.isNotEmpty()) {
+                parsed.mapIndexed { idx, elem ->
+                    val obj = elem as? kotlinx.serialization.json.JsonObject
+                    val idVal = obj?.get("id")?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: "cand-${idx + 1}"
+                    val titleVal = obj?.get("title")?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: "Kandidat ${idx + 1}"
+                    val contentVal = obj?.get("content")?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: promptText
+                    mapOf(
+                        "id" to idVal,
+                        "title" to titleVal,
+                        "content" to contentVal,
+                        "sourceType" to "ai_synthesized_prompt"
+                    )
+                }
+            } else {
+                listOf(
+                    mapOf(
+                        "id" to "cand-1",
+                        "title" to "Kandidat Teranalisis",
+                        "content" to promptText,
+                        "sourceType" to "ai_synthesized_prompt"
+                    )
+                )
+            }
+        } catch (e: Exception) {
+            logger.warn("Failed to parse synthesized candidates JSON, fallback to prompt entity: ${e.message}")
+            listOf(
+                mapOf(
+                    "id" to "cand-1",
+                    "title" to "Kandidat Teranalisis",
+                    "content" to promptText,
+                    "sourceType" to "ai_synthesized_prompt"
+                )
+            )
         }
     }
 

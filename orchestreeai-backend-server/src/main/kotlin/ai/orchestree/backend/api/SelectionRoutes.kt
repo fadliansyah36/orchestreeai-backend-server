@@ -358,6 +358,16 @@ fun Route.selectionRoutes() {
                 ?: "user-default"
 
             val body = call.receive<PromptOnlySelectionRequest>()
+
+            val (isSafe, blockReason) = promptGuard.inspect(body.prompt)
+            if (!isSafe) {
+                call.respond(
+                    HttpStatusCode.BadRequest,
+                    mapOf("status" to "failed", "error" to (blockReason ?: "Prompt injection detected"))
+                )
+                return@post
+            }
+
             val reqId = UUID.randomUUID().toString()
             val reqRecord = SelectionRequestRecord(
                 id = reqId,

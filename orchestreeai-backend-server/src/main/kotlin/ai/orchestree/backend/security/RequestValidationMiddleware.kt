@@ -25,6 +25,27 @@ private val logger = LoggerFactory.getLogger("ai.orchestree.backend.security.Req
  */
 object ServerInputValidator {
     private val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+    private val sqlSanitizer = InputValidationAndEncoding()
+    private val promptGuard = PromptInjectionGuard()
+
+    fun validateSqlSafe(input: String): Pair<Boolean, String?> {
+        val lower = input.lowercase()
+        val dangerousTokens = listOf(
+            "--", ";", "/*", "*/", "@@", "char(", "nchar(", "varchar(",
+            "union select", "drop table", "alter table", "create table",
+            "insert into", "delete from"
+        )
+        for (token in dangerousTokens) {
+            if (lower.contains(token)) {
+                return false to "Input ditolak: terdeteksi token berbahaya ($token)"
+            }
+        }
+        return true to null
+    }
+
+    fun validatePromptSafe(input: String): Pair<Boolean, String?> {
+        return promptGuard.inspect(input)
+    }
 
     fun validateEmail(input: String): Pair<Boolean, String?> {
         val trimmed = input.trim()
@@ -87,6 +108,16 @@ fun Application.configureRequestValidation() {
             if (request.title.contains("\u0000") || request.description.contains("\u0000")) {
                 reasons.add("Input tugas mengandung karakter null-byte ilegal")
             }
+
+            val (sqlSafeTitle, sqlErrTitle) = ServerInputValidator.validateSqlSafe(request.title)
+            if (!sqlSafeTitle) reasons.add(sqlErrTitle ?: "Judul mengandung karakter SQL berbahaya")
+
+            val (sqlSafeDesc, sqlErrDesc) = ServerInputValidator.validateSqlSafe(request.description)
+            if (!sqlSafeDesc) reasons.add(sqlErrDesc ?: "Deskripsi mengandung karakter SQL berbahaya")
+
+            val (promptSafe, promptErr) = ServerInputValidator.validatePromptSafe("${request.title} ${request.description}")
+            if (!promptSafe) reasons.add(promptErr ?: "Input melanggar kebijakan keamanan sistem")
+
             if (reasons.isEmpty()) ValidationResult.Valid else ValidationResult.Invalid(reasons)
         }
 

@@ -255,6 +255,21 @@ class SchedulerEngine(
                 delay(60_000 * 5) // 5 minutes
             }
         }
+
+        // 11. Distributed Job Queue Worker (processes background jobs claimed with FOR UPDATE SKIP LOCKED)
+        activeJobs["QUEUE_WORKER"] = scope.launch {
+            while (isActive) {
+                try {
+                    val run = processNextClaimedJob()
+                    if (run == null) {
+                        delay(3000)
+                    }
+                } catch (e: Exception) {
+                    logger.warn("[SCHEDULER:QUEUE_WORKER] Error executing claimed job: ${e.message}")
+                    delay(5000)
+                }
+            }
+        }
     }
 
     /**
@@ -297,6 +312,14 @@ class SchedulerEngine(
                 "CREDIT_EXPIRATION" -> {
                     val count = creditExpirationJob.execute()
                     "Expired subscription balances for $count tenant(s)"
+                }
+                "MONITORING_LOOP" -> {
+                    monitoringLoopJob.execute()
+                    "Monitoring loop executed: anomaly scans complete"
+                }
+                "NVIDIA_NIM_CATALOG_SYNC" -> {
+                    syncNvidiaNimCatalogJob.execute()
+                    "NVIDIA NIM catalog sync complete"
                 }
                 else -> throw IllegalArgumentException("Unsupported queue job type: ${job.jobType}")
             }
@@ -365,6 +388,14 @@ class SchedulerEngine(
                     val count = creditExpirationJob.execute()
                     "Expired subscription balances for $count tenant(s)"
                 }
+                "MONITORING_LOOP" -> {
+                    monitoringLoopJob.execute()
+                    "Monitoring loop executed: anomaly scans complete"
+                }
+                "NVIDIA_NIM_CATALOG_SYNC" -> {
+                    syncNvidiaNimCatalogJob.execute()
+                    "NVIDIA NIM catalog sync complete"
+                }
                 else -> {
                     throw IllegalArgumentException("Job $jobName not found")
                 }
@@ -407,6 +438,14 @@ class SchedulerEngine(
                 "CREDIT_EXPIRATION" -> {
                     val count = creditExpirationJob.execute()
                     "Expired subscription balances for $count tenant(s)"
+                }
+                "MONITORING_LOOP" -> {
+                    monitoringLoopJob.execute()
+                    "Monitoring loop executed: anomaly scans complete"
+                }
+                "NVIDIA_NIM_CATALOG_SYNC" -> {
+                    syncNvidiaNimCatalogJob.execute()
+                    "NVIDIA NIM catalog sync complete"
                 }
                 else -> throw IllegalArgumentException("Cannot reprocess unsupported job type: ${record.jobType}")
             }

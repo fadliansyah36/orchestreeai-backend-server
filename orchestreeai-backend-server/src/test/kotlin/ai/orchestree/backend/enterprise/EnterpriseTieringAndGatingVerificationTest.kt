@@ -1,5 +1,18 @@
 package ai.orchestree.backend.enterprise
 
+import io.ktor.client.request.post
+import io.ktor.client.request.header
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.HttpHeaders
+import io.ktor.http.ContentType
+import io.ktor.server.testing.testApplication
+import ai.orchestree.backend.module
+import ai.orchestree.backend.config.SecurityConfig
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
+import java.util.Date
 import ai.orchestree.backend.mcptools.McpExecutionResult
 import ai.orchestree.backend.mcptools.McpRiskLevel
 import ai.orchestree.backend.mcptools.McpToolExecutor
@@ -362,5 +375,75 @@ class EnterpriseTieringAndGatingVerificationTest {
         assertTrue(aiResultWithPolicy.success, "AI Agent with policy must succeed")
         assertFalse(aiResultWithPolicy.isBlockedByGovernance)
         assertTrue(aiResultWithPolicy.output.contains("SYNCHRONIZED") || aiResultWithPolicy.output.contains("found"))
+    }
+
+    private val jwtSecret = SecurityConfig.fromEnv().jwtSecretKey.ifBlank { "101ffa9b-10c9-4e15-9390-90c2d32ed6c8" }
+    private val algorithm = Algorithm.HMAC256(jwtSecret)
+
+    private fun generateToken(tenantId: String, userId: String, role: String): String {
+        return JWT.create()
+            .withSubject(userId)
+            .withClaim("sub", userId)
+            .withClaim("user_id", userId)
+            .withClaim("tenant_id", tenantId)
+            .withClaim("role", role)
+            .withIssuedAt(Date())
+            .withExpiresAt(Date(System.currentTimeMillis() + 3600 * 1000))
+            .sign(algorithm)
+    }
+
+    @Test
+    fun testHttpEnterpriseConnectionCreationFailsForGrowthTenantWithCapabilityNotAvailableException() = testApplication {
+        application {
+            module()
+        }
+        val tenantId = "tenant-growth-curl-test"
+        FeatureCapabilityService.setTenantTier(tenantId, TierLevel.GROWTH)
+
+        val response = client.post("/api/v1/tenants/$tenantId/enterprise-connections") {
+            header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            header(HttpHeaders.Authorization, "Bearer ${generateToken(tenantId, "user-owner", "TENANT_OWNER")}")
+            setBody("""{
+                "systemType": "erp",
+                "authType": "API_CONNECTOR",
+                "connectionEndpoint": "https://erp.growthcorp.com/api"
+            }""")
+        }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+        val body = response.bodyAsText()
+        println("=== RAW CURL RESPONSE (GROWTH TENANT ENTERPRISE-ONLY GATED) ===")
+        println("HTTP Status: ${response.status}")
+        println("Response Body: $body")
+        assertTrue(body.contains("CapabilityNotAvailableException"))
+        assertTrue(body.contains("CAPABILITY_NOT_AVAILABLE"))
+        assertTrue(body.contains("integration_fabric"))
+    }
+
+    @Test
+    fun testHttpAiAgentWithoutPolicyFailsWithDeniedNoPolicy() = testApplication {
+        application {
+            module()
+        }
+        val tenantId = "tenant-enterprise-curl-test"
+        FeatureCapabilityService.setTenantTier(tenantId, TierLevel.ENTERPRISE)
+
+        val response = client.post("/api/v1/tenants/$tenantId/ai-data-permissions/check") {
+            header(HttpHeaders.ContentType, ContentType.Application.Json.toString())
+            header(HttpHeaders.Authorization, "Bearer ${generateToken(tenantId, "user-owner", "TENANT_OWNER")}")
+            setBody("""{
+                "agentId": "agent-unauthorized-ai",
+                "connectionId": "conn-sap-production",
+                "recordType": "PO",
+                "accessLevel": "READ_ONLY"
+            }""")
+        }
+
+        assertEquals(HttpStatusCode.Forbidden, response.status)
+        val body = response.bodyAsText()
+        println("=== RAW CURL RESPONSE (AI AGENT WITHOUT POLICY DENIED) ===")
+        println("HTTP Status: ${response.status}")
+        println("Response Body: $body")
+        assertTrue(body.contains("DENIED_NO_POLICY"))
     }
 }

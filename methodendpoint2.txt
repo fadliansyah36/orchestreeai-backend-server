@@ -1,0 +1,2572 @@
+# DOKUMEN METHOD & ENDPOINT FINAL (GREP-CONFIRMED)
+> **Definitive Reference Document**: Dihasilkan secara langsung dari verifikasi grep kode sumber aktual Ktor backend server (`ai.orchestree.backend`). Dokumen ini menggantikan `methodendpoint.txt`, `methodendpoint2.txt`, dan seluruh dokumen audit parsial sebelumnya.
+
+## Ringkasan Eksekutif & Statistik Endpoint
+- **Total Endpoint Terverifikasi (Grep-Confirmed)**: **310 Endpoint**
+- **Total Domain Operasional**: **16 Domain**
+
+| Domain | File Sumber | Jumlah Endpoint |
+|---|---|:---:|
+| 1. Core Domain - System & Webhook Gateways | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt` | **10** |
+| 2. Core Domain - Authentication & Profile Lifecycle | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AuthRoutes.kt` | **6** |
+| 3. Core Domain - Master Data & Public Catalog | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MasterDataRoutes.kt` | **9** |
+| 4. Core Domain - Biometric Presence & Liveness | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/PresenceRoutes.kt` | **6** |
+| 5. Core Domain - Attendance & Geofencing | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AttendanceRoutes.kt` | **3** |
+| 6. Core Domain - Prospect Registration & Onboarding | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/prospect/ProspectRoutes.kt` | **5** |
+| 7. Core Domain - Tenants, Hybrid Workforce, Taskboard & Intel | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt` | **41** |
+| 8. Orchestration Domain - Workflow DAG, Checkpoints & MCP Execution | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt` | **14** |
+| 9. Chat Domain - Agent Direct Conversation & Company Brain Knowledge | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/ChatRoutes.kt` | **5** |
+| 10. Selection Domain - Universal Selection, Understanding & Calibration | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt` | **20** |
+| 11. Generative Studio Domain - Creative Assets & Multimodal Synthesis | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/GenerativeStudioRoutes.kt` | **8** |
+| 12. Enterprise Domain - Governance, Context Fabric & Chief of Staff | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt` | **38** |
+| 13. Memory Domain - Autonomous Consolidation, Decay & Hybrid Search | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MemoryRoutes.kt` | **6** |
+| 14. Omnichannel & Sales Domain - Channels, CRM, Catalog & Commerce | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt` | **28** |
+| 15. Billing Domain - Commercial Plans, Credits, Quota & Dunning | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt` | **22** |
+| 16. Admin Domain - Operations, Security, MCP & Financial Command | `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt` | **89** |
+| **TOTAL** | | **310** |
+
+---
+
+## 1. Core Domain - System & Webhook Gateways
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt`
+- **Jumlah Endpoint**: **10**
+
+### 1. `GET` /
+- **Grep Confirmation**: Line 61 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChannelGateway, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `GET` /health
+- **Grep Confirmation**: Line 65 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `service = "orchestreeai-backend-server", timestamp = System.currentTimeMillis(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChannelGateway, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `GET` /api/health
+- **Grep Confirmation**: Line 75 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `service = "orchestreeai-backend-server", timestamp = System.currentTimeMillis(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChannelGateway, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `GET` /api/v1/platform-assets/icon-logo
+- **Grep Confirmation**: Line 96 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("platformIconLogoUrl" to (url ?: ""`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChannelGateway, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `POST` /api/v1/payments/webhook/{gateway}
+- **Grep Confirmation**: Line 110 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt`
+- **Header Wajib**: X-Signature: <signature-key>
+- **Request Body Schema**: `Raw Text / Webhook Payload String (JSON format)`
+- **Response Body Schema**: `mapOf("error" to "Invalid payment webhook signature"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChannelGateway, CommercialCreditEngine, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 6. `POST` /api/v1/shipments/webhook/{courier}
+- **Grep Confirmation**: Line 163 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `Raw Text / Webhook Payload String (JSON format)`
+- **Response Body Schema**: `mapOf("status" to "processed", "courier" to courier`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChannelGateway, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 7. `POST` /api/v1/webhooks/whatsapp
+- **Grep Confirmation**: Line 207 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt`
+- **Header Wajib**: X-Hub-Signature-256: sha256=<hmac-hash>
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChannelGateway, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 8. `POST` /api/v1/webhooks/telegram
+- **Grep Confirmation**: Line 208 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt`
+- **Header Wajib**: X-Telegram-Bot-Api-Secret-Token: <secret-token>
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChannelGateway, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 9. `POST` /api/v1/webhook/whatsapp
+- **Grep Confirmation**: Line 212 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt`
+- **Header Wajib**: X-Hub-Signature-256: sha256=<hmac-hash>
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChannelGateway, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 10. `POST` /api/v1/webhook/telegram
+- **Grep Confirmation**: Line 213 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/plugins/Routing.kt`
+- **Header Wajib**: X-Telegram-Bot-Api-Secret-Token: <secret-token>
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChannelGateway, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 2. Core Domain - Authentication & Profile Lifecycle
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AuthRoutes.kt`
+- **Jumlah Endpoint**: **6**
+
+### 1. `POST` /api/v1/auth/login
+- **Grep Confirmation**: Line 74 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AuthRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `LoginApiRequest`
+- **Response Body Schema**: `mapOf("error" to "Tenant ID is required and could not be resolved from request body or ...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `POST` /api/v1/auth/refresh
+- **Grep Confirmation**: Line 173 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AuthRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `RefreshApiRequest`
+- **Response Body Schema**: `mapOf("error" to "Tenant ID is required and could not be resolved from refresh token or...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `GET` /api/v1/auth/sessions
+- **Grep Confirmation**: Line 212 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AuthRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Token otentikasi dibutuhkan"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `POST` /api/v1/auth/sessions/revoke/{id}
+- **Grep Confirmation**: Line 277 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AuthRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `mapOf("status" to "revoked", "id" to sessionId, "success" to revoked`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `GET` /api/v1/auth/profile
+- **Grep Confirmation**: Line 293 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AuthRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Token otentikasi dibutuhkan"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 6. `POST` /api/v1/auth/profile
+- **Grep Confirmation**: Line 362 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AuthRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `UserProfileDto`
+- **Response Body Schema**: `req`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 3. Core Domain - Master Data & Public Catalog
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MasterDataRoutes.kt`
+- **Jumlah Endpoint**: **9**
+
+### 1. `GET` /api/v1/public/department-categories
+- **Grep Confirmation**: Line 16 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MasterDataRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `POST` /api/v1/public/department-categories
+- **Grep Confirmation**: Line 22 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MasterDataRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `DepartmentCategoryRecord`
+- **Response Body Schema**: `mapOf("status" to "CREATED", "category_code" to record.category_code`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `GET` /api/v1/public/industry-catalog
+- **Grep Confirmation**: Line 29 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MasterDataRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `GET` /api/v1/public/job-level-catalog
+- **Grep Confirmation**: Line 35 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MasterDataRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `GET` /api/v1/public/job-sub-title-catalog
+- **Grep Confirmation**: Line 41 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MasterDataRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 6. `GET` /api/v1/tenants/{id}/ai-job-titles
+- **Grep Confirmation**: Line 53 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MasterDataRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 7. `POST` /api/v1/tenants/{id}/ai-job-titles
+- **Grep Confirmation**: Line 60 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MasterDataRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `AiJobTitleRecord`
+- **Response Body Schema**: `mapOf("status" to "CREATED", "job_code" to record.job_code`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 8. `GET` /api/v1/tenants/{id}/ai-job-titles/{jobTitleId}/structural-roles
+- **Grep Confirmation**: Line 67 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MasterDataRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 9. `GET` /api/v1/tenants/{id}/ai-job-titles/{jobTitleId}/available-skills
+- **Grep Confirmation**: Line 75 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MasterDataRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 4. Core Domain - Biometric Presence & Liveness
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/PresenceRoutes.kt`
+- **Jumlah Endpoint**: **6**
+
+### 1. `POST` /api/v1/presence/enroll
+- **Grep Confirmation**: Line 31 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/PresenceRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `PresenceEnrollRequest`
+- **Response Body Schema**: `mapOf("error" to "userId is required"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke FaceBiometricVerificationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `GET` /api/v1/presence/requirement-check
+- **Grep Confirmation**: Line 58 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/PresenceRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Query parameter 'userId' or 'X-User-Id' header is required"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke FaceBiometricVerificationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `POST` /api/v1/presence/verify
+- **Grep Confirmation**: Line 98 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/PresenceRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `PresenceVerifyRequest`
+- **Response Body Schema**: `mapOf("error" to "userId is required"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke FaceBiometricVerificationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `GET` /api/v1/presence/enrollment
+- **Grep Confirmation**: Line 131 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/PresenceRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "userId is required"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke FaceBiometricVerificationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `GET` /api/v1/presence/logs
+- **Grep Confirmation**: Line 153 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/PresenceRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "userId is required"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke FaceBiometricVerificationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 6. `GET` /api/v1/presence/security-audit-stats
+- **Grep Confirmation**: Line 172 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/PresenceRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `stats`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke FaceBiometricVerificationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 5. Core Domain - Attendance & Geofencing
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AttendanceRoutes.kt`
+- **Jumlah Endpoint**: **3**
+
+### 1. `POST` /api/v1/attendance/check-in
+- **Grep Confirmation**: Line 67 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AttendanceRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `AttendanceCheckInRequest`
+- **Response Body Schema**: `AttendanceCheckInResponse( id = recordId, status = status, message = msg, timestamp = S...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke GeofenceVerificationEngine
+- **Tabel Supabase Terpengaruh**: `attendance_records`
+
+### 2. `GET` /api/v1/attendance/anomalies
+- **Grep Confirmation**: Line 133 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AttendanceRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke GeofenceVerificationEngine
+- **Tabel Supabase Terpengaruh**: `attendance_anomalies`
+
+### 3. `GET` /api/v1/attendance/history
+- **Grep Confirmation**: Line 139 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AttendanceRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( AttendanceRecordItem( id = "att-01", userId = userId, tenantId = tenantId, time...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke GeofenceVerificationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 6. Core Domain - Prospect Registration & Onboarding
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/prospect/ProspectRoutes.kt`
+- **Jumlah Endpoint**: **5**
+
+### 1. `POST` /api/v1/public/prospect-registration
+- **Grep Confirmation**: Line 44 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/prospect/ProspectRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `ProspectRegistrationRequest`
+- **Response Body Schema**: `mapOf("error" to "Batas pengajuan per IP telah tercapai (maksimal 5 submission/hari`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `GET` /api/v1/admin/prospect-registrations/analytics
+- **Grep Confirmation**: Line 138 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/prospect/ProspectRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `analytics`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `PATCH` /api/v1/admin/prospect-registrations/{id}/select-trial
+- **Grep Confirmation**: Line 152 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/prospect/ProspectRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `SelectTrialRequest`
+- **Response Body Schema**: `"Missing prospect ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `PATCH` /api/v1/admin/prospect-registrations/{id}/schedule-meeting
+- **Grep Confirmation**: Line 169 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/prospect/ProspectRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ScheduleMeetingRequest`
+- **Response Body Schema**: `"Missing prospect ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `POST` /api/v1/admin/prospect-registrations/{id}/activate-trial
+- **Grep Confirmation**: Line 186 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/prospect/ProspectRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `"Missing prospect ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke Domain Repository & Service Provider
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 7. Core Domain - Tenants, Hybrid Workforce, Taskboard & Intel
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Jumlah Endpoint**: **41**
+
+### 1. `GET` /api/v1/tenants/{id}/dashboard/overview
+- **Grep Confirmation**: Line 311 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `TenantDashboardOverviewResponse( tenantId = tenantId, activeAgents = 15, humanStaffCoun...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `GET` /api/v1/tenants/{id}/departments
+- **Grep Confirmation**: Line 327 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `departments`
+
+### 3. `POST` /api/v1/tenants/{id}/departments
+- **Grep Confirmation**: Line 333 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `DepartmentCreateRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "created", id = deptId, message = req.name`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `departments`
+
+### 4. `DELETE` /api/v1/tenants/{id}/departments/{deptId}
+- **Grep Confirmation**: Line 351 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `GenericStatusResponse(status = "DELETED", id = deptId, message = "Department deleted"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `departments`
+
+### 5. `GET` /api/v1/tenants/{id}/staff
+- **Grep Confirmation**: Line 359 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `staff_profiles`
+
+### 6. `DELETE` /api/v1/tenants/{id}/staff/{staffId}
+- **Grep Confirmation**: Line 365 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `GenericStatusResponse(status = "DELETED", id = staffId, message = "Staff deleted"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `staff_profiles`
+
+### 7. `POST` /api/v1/tenants/{id}/staff
+- **Grep Confirmation**: Line 372 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `StaffCreateRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "created", id = staffId, message = req.email`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `staff_profiles`
+
+### 8. `GET` /api/v1/tenants/{id}/agents
+- **Grep Confirmation**: Line 401 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `ai_agents`
+
+### 9. `POST` /api/v1/tenants/{id}/agents
+- **Grep Confirmation**: Line 407 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `AgentCreateRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "created", id = agentId, message = req.name`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `ai_agents`
+
+### 10. `GET` /api/v1/tenants/{id}/tasks
+- **Grep Confirmation**: Line 432 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "User identity is required to fetch assigned tasks"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `tasks`
+
+### 11. `POST` /api/v1/tenants/{id}/tasks
+- **Grep Confirmation**: Line 448 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `Map<String, String`
+- **Response Body Schema**: `GenericStatusResponse(status = "created", id = taskId, message = req["title"]`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `tasks`
+
+### 12. `GET` /api/v1/tenants/{id}/boards/{boardId}
+- **Grep Confirmation**: Line 471 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `BoardKanbanResponse( boardId = boardId, tenantId = tenantId, columns = listOf("BACKLOG"...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 13. `POST` /api/v1/tasks/inbound-channel-message
+- **Grep Confirmation**: Line 503 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `InboundChannelMessageApiRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, ChannelGateway, ModelRouter
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 14. `GET` /api/v1/tasks/proactive/subscriptions
+- **Grep Confirmation**: Line 521 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( ProactiveSubscriptionItem( id = "sub-01", tenantId = tenantId, staffId = "staff...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 15. `GET` /api/v1/tasks/proactive/scope/{staffId}
+- **Grep Confirmation**: Line 539 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `scope`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 16. `POST` /api/v1/tasks/proactive/subscriptions
+- **Grep Confirmation**: Line 548 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `ProactiveSubscriptionRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "ACTIVE", id = req.staffId, message = "Subscribed with s...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 17. `POST` /api/v1/tenants/tasks/inbound-channel-message
+- **Grep Confirmation**: Line 561 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `InboundChannelMessageApiRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, ChannelGateway, ModelRouter
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 18. `PATCH` /api/v1/tasks/{taskId}/move
+- **Grep Confirmation**: Line 580 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `TaskMoveRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "UPDATED", id = taskId, message = destination`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `tasks`
+
+### 19. `GET` /api/v1/tasks/{taskId}/checklists
+- **Grep Confirmation**: Line 596 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 20. `POST` /api/v1/tasks/{taskId}/checklists
+- **Grep Confirmation**: Line 602 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `ChecklistItemCreateRequest`
+- **Response Body Schema**: `created`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 21. `PATCH` /api/v1/tasks/{taskId}/checklists/{checklistId}/toggle
+- **Grep Confirmation**: Line 616 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `mapOf("success" to success, "checklistId" to checklistId, "isCompleted" to isCompleted`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 22. `GET` /api/v1/tasks/{taskId}/activity-log
+- **Grep Confirmation**: Line 624 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `logs`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 23. `PATCH` /api/v1/tasks/{taskId}/description
+- **Grep Confirmation**: Line 630 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `TaskDescriptionUpdateRequest`
+- **Response Body Schema**: `result.getOrThrow(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 24. `GET` /api/v1/tasks/{taskId}/attachments
+- **Grep Confirmation**: Line 641 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 25. `POST` /api/v1/tasks/{taskId}/attachments
+- **Grep Confirmation**: Line 647 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `AttachmentCreateRequest`
+- **Response Body Schema**: `created`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 26. `GET` /api/v1/intel/competitors/{id}/insights
+- **Grep Confirmation**: Line 797 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `finalInsights`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 27. `POST` /api/v1/integrations/{platform}/connect
+- **Grep Confirmation**: Line 900 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `IntegrationConnectRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "CONNECTED", id = platform, message = "HEALTHY"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 28. `GET` /api/v1/proactive/subscriptions
+- **Grep Confirmation**: Line 912 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( ProactiveSubscriptionItem( id = "sub-01", tenantId = tenantId, staffId = "staff...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 29. `GET` /api/v1/proactive/scope/{staffId}
+- **Grep Confirmation**: Line 930 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `scope`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 30. `POST` /api/v1/proactive/subscriptions
+- **Grep Confirmation**: Line 939 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `ProactiveSubscriptionRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "ACTIVE", id = req.staffId, message = "Subscribed with s...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 31. `GET` /api/v1/analytics/scores
+- **Grep Confirmation**: Line 952 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `AnalyticsScoreResponse( period = period, humanRanking = listOf( RankingEntry(name = "Bu...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 32. `GET` /api/v1/performance/reports
+- **Grep Confirmation**: Line 973 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( WorkReportDailyItem( id = "wr-01", tenantId = tenantId, staffId = "staff-01", s...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 33. `POST` /api/v1/performance/reports
+- **Grep Confirmation**: Line 992 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `CreateWorkReportRequest`
+- **Response Body Schema**: `WorkReportDailyItem( id = "wr-${System.currentTimeMillis(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 34. `GET` /api/v1/performance/goals
+- **Grep Confirmation**: Line 1010 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( GoalKpiItem( id = "kpi-01", tenantId = tenantId, title = "Q3 Revenue Target", t...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 35. `GET` /api/v1/performance/reviews
+- **Grep Confirmation**: Line 1039 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( PerformanceReviewItem( id = "rev-01", tenantId = tenantId, staffId = "staff-01"...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 36. `GET` /api/v1/performance/predictions
+- **Grep Confirmation**: Line 1058 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( PerformanceRiskPredictionItem( id = "pred-01", tenantId = tenantId, staffId = "...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 37. `GET` /api/v1/performance/executive-briefs
+- **Grep Confirmation**: Line 1077 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( ExecutiveBriefItem( id = "eb-01", tenantId = tenantId, title = "Monthly Executi...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 38. `GET` /api/v1/security/anomalies
+- **Grep Confirmation**: Line 1098 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( SecurityAnomalyItem( id = "sec-01", tenantId = tenantId, anomalyType = "IP_LOCA...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 39. `GET` /api/v1/security/dsr
+- **Grep Confirmation**: Line 1115 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( DataSubjectRequestItem( id = "dsr-01", tenantId = tenantId, requestType = "RIGH...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 40. `POST` /api/v1/security/dsr
+- **Grep Confirmation**: Line 1131 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `CreateDataSubjectRequest`
+- **Response Body Schema**: `DataSubjectRequestItem( id = "dsr-${System.currentTimeMillis(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 41. `POST` /api/v1/attendance/anomalies/{anomalyId}/resolve
+- **Grep Confirmation**: Line 1168 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/TenantRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `GenericStatusResponse(status = "RESOLVED", id = anomalyId, message = "Anomaly resolved ...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ProactiveCollaborationScopeRepository, CompetitorIntelligenceService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 8. Orchestration Domain - Workflow DAG, Checkpoints & MCP Execution
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Jumlah Endpoint**: **14**
+
+### 1. `POST` /api/v1/orchestration/dispatch
+- **Grep Confirmation**: Line 59 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `WorkflowDispatchRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `POST` /api/v1/orchestration/workflows/run
+- **Grep Confirmation**: Line 71 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `WorkflowDispatchRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `GET` /api/v1/orchestration/status/{executionId}
+- **Grep Confirmation**: Line 83 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `GET` /api/v1/orchestration/executions/{executionId}
+- **Grep Confirmation**: Line 96 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `GET` /api/v1/orchestration/approvals
+- **Grep Confirmation**: Line 109 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `pendingList`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 6. `POST` /api/v1/orchestration/approvals/{id}/decision
+- **Grep Confirmation**: Line 115 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ApprovalDecisionApiRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 7. `GET` /api/v1/orchestration/traces
+- **Grep Confirmation**: Line 143 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `traces`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 8. `GET` /api/v1/orchestration/traces/{executionId}
+- **Grep Confirmation**: Line 148 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf( "executionId" to executionId, "traceId" to (spans.firstOrNull(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 9. `GET` /api/v1/orchestration/traces/by-trace/{traceId}
+- **Grep Confirmation**: Line 164 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `spans`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 10. `GET` /api/v1/intelligence/confidence/calibration
+- **Grep Confirmation**: Line 177 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `calibrations`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 11. `POST` /api/v1/intelligence/confidence/calibrate
+- **Grep Confirmation**: Line 186 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `mapOf( "status" to "CALIBRATED", "tenantId" to tenantId, "bucketsCalibrated" to result....`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 12. `GET` /api/v1/intelligence/confidence/audit
+- **Grep Confirmation**: Line 197 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `report`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 13. `GET` /api/v1/mcp/tools
+- **Grep Confirmation**: Line 206 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `tools`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 14. `POST` /api/v1/mcp/execute
+- **Grep Confirmation**: Line 211 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OrchestrationRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `McpExecuteApiRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 9. Chat Domain - Agent Direct Conversation & Company Brain Knowledge
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/ChatRoutes.kt`
+- **Jumlah Endpoint**: **5**
+
+### 1. `POST` /api/v1/chat/messages
+- **Grep Confirmation**: Line 112 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/ChatRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `ChatApiRequest`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, PromptInjectionGuard
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `GET` /api/v1/chat/history/{conversationId}
+- **Grep Confirmation**: Line 118 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/ChatRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `history.map { mapOf("role" to it.first, "content" to it.second`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, PromptInjectionGuard
+- **Tabel Supabase Terpengaruh**: `conversation_messages`
+
+### 3. `POST` /api/v1/agents/{agentId}/chat
+- **Grep Confirmation**: Line 160 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/ChatRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `ChatApiRequest`
+- **Response Body Schema**: `mapOf( "status" to "failed", "error" to (blockReason ?: "Security policy violation: pro...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, ModelRouter, PromptInjectionGuard
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `POST` /api/v1/company-brain/documents
+- **Grep Confirmation**: Line 245 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/ChatRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `DocumentUploadRequest`
+- **Response Body Schema**: `mapOf( "documentId" to docId, "title" to uploadReq.title, "chunksIndexed" to chunkCount...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, PromptInjectionGuard
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `GET` /api/v1/company-brain/search
+- **Grep Confirmation**: Line 266 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/ChatRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `results`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, PromptInjectionGuard
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 10. Selection Domain - Universal Selection, Understanding & Calibration
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Jumlah Endpoint**: **20**
+
+### 1. `POST` /api/v1/selection/upload
+- **Grep Confirmation**: Line 212 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `Multipart Form Data (file upload / binary stream)`
+- **Response Body Schema**: `mapOf("error" to "No file uploaded or file is empty"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `selection_requests`
+
+### 2. `POST` /api/v1/selection/prompt-only
+- **Grep Confirmation**: Line 353 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `PromptOnlySelectionRequest`
+- **Response Body Schema**: `mapOf("status" to "failed", "error" to (blockReason ?: "Prompt injection detected"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `POST` /api/v1/selection/api-database
+- **Grep Confirmation**: Line 401 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `ApiDatabaseSelectionRequest`
+- **Response Body Schema**: `mapOf( "requestId" to reqId, "status" to "processing", "sourceType" to "api_database"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `GET` /api/v1/selection/requests
+- **Grep Confirmation**: Line 443 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `list`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `GET` /api/v1/selection/{id}
+- **Grep Confirmation**: Line 453 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Selection request not found"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 6. `GET` /api/v1/selection/{id}/results
+- **Grep Confirmation**: Line 479 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `results`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 7. `GET` /api/v1/selection/{id}/analytics
+- **Grep Confirmation**: Line 490 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `analytics`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 8. `POST` /api/v1/selection/documents/{documentId}/understand
+- **Grep Confirmation**: Line 501 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `mapOf("error" to "documentId is required"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 9. `GET` /api/v1/selection/documents/{documentId}/understanding
+- **Grep Confirmation**: Line 521 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "documentId is required"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 10. `POST` /api/v1/selection/calibration
+- **Grep Confirmation**: Line 541 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `CalibrationRequest`
+- **Response Body Schema**: `mapOf("error" to "Role claim missing from authenticated token"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 11. `GET` /api/v1/selection/calibration
+- **Grep Confirmation**: Line 576 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `list`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 12. `GET` /api/v1/selection/calibration/{id}
+- **Grep Confirmation**: Line 586 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Calibration setting not found"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 13. `POST` /api/v1/selection/calibration/{id}/validate-dataset/{documentId}
+- **Grep Confirmation**: Line 605 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `mapOf("error" to "Calibration setting not found"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 14. `POST` /api/v1/selection/results/{id}/review
+- **Grep Confirmation**: Line 642 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ReviewSelectionResultRequest`
+- **Response Body Schema**: `updated.getOrThrow(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 15. `POST` /api/v1/selection/results/{id}/execute-downstream
+- **Grep Confirmation**: Line 674 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `mapOf("error" to "Selection result not found"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 16. `GET` /api/v1/selection/auto-selection/configs
+- **Grep Confirmation**: Line 751 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `configs`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 17. `POST` /api/v1/selection/auto-selection/configs
+- **Grep Confirmation**: Line 758 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `AutoSelectionConfigCreateRequest`
+- **Response Body Schema**: `saved`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 18. `DELETE` /api/v1/selection/auto-selection/configs/{id}
+- **Grep Confirmation**: Line 776 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("status" to "deleted", "id" to id`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 19. `POST` /api/v1/selection/webhook/storage
+- **Grep Confirmation**: Line 794 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `StorageUploadWebhookPayload`
+- **Response Body Schema**: `mapOf("error" to "Invalid storage webhook payload: ${e.message}"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 20. `POST` /api/v1/selection/webhook/integration-fabric
+- **Grep Confirmation**: Line 958 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/SelectionRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `IntegrationFabricWebhookPayload`
+- **Response Body Schema**: `mapOf("error" to "Invalid integration fabric payload: ${e.message}"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SelectionEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 11. Generative Studio Domain - Creative Assets & Multimodal Synthesis
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/GenerativeStudioRoutes.kt`
+- **Jumlah Endpoint**: **8**
+
+### 1. `POST` /api/v1/studio/generate-image
+- **Grep Confirmation**: Line 74 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/GenerativeStudioRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `GenerateImageRequest`
+- **Response Body Schema**: `mapOf("status" to "failed", "error" to (blockReason ?: "Prompt injection detected"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, ModelRouter, GenerativeStudioOrchestrationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `POST` /api/v1/studio/compose-prompt
+- **Grep Confirmation**: Line 151 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/GenerativeStudioRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `ComposePromptRequest`
+- **Response Body Schema**: `composed`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, GenerativeStudioOrchestrationEngine, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `POST` /api/v1/studio/campaign-creative
+- **Grep Confirmation**: Line 163 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/GenerativeStudioRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `CampaignCreativeRequest`
+- **Response Body Schema**: `mapOf("status" to "failed", "error" to (blockReason ?: "Prompt injection detected in cr...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, GenerativeStudioOrchestrationEngine, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `GET` /api/v1/studio/templates
+- **Grep Confirmation**: Line 179 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/GenerativeStudioRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `emptyList<String>(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, GenerativeStudioOrchestrationEngine, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `POST` /api/v1/studio/brand-assets/upload-logo
+- **Grep Confirmation**: Line 184 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/GenerativeStudioRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `BrandLogoUploadRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, GenerativeStudioOrchestrationEngine, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 6. `POST` /api/v1/studio/brand-assets/logo
+- **Grep Confirmation**: Line 200 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/GenerativeStudioRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `BrandLogoUploadRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, GenerativeStudioOrchestrationEngine, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 7. `GET` /api/v1/studio/assets
+- **Grep Confirmation**: Line 216 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/GenerativeStudioRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, GenerativeStudioOrchestrationEngine, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 8. `POST` /api/v1/studio/assets
+- **Grep Confirmation**: Line 233 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/GenerativeStudioRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `BrandAssetCreateRequest`
+- **Response Body Schema**: `BrandAssetItem( id = created.id, tenantId = created.tenantId, title = created.assetName...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, GenerativeStudioOrchestrationEngine, BrandAssetService
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 12. Enterprise Domain - Governance, Context Fabric & Chief of Staff
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Jumlah Endpoint**: **38**
+
+### 1. `GET` /api/v1/tenants/{id}/enterprise-connections
+- **Grep Confirmation**: Line 209 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `connections`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `POST` /api/v1/tenants/{id}/enterprise-connections
+- **Grep Confirmation**: Line 215 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `EnterpriseConnectionCreateRequest`
+- **Response Body Schema**: `EnterpriseConnectionCreateResponse( connectionId = connection.id, systemType = connecti...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `GET` /api/v1/tenants/{id}/ai-data-permissions
+- **Grep Confirmation**: Line 243 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `policies`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `POST` /api/v1/tenants/{id}/ai-data-permissions
+- **Grep Confirmation**: Line 249 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `AiDataPermissionPolicyRequest`
+- **Response Body Schema**: `AiDataPermissionPolicyResponse( policyId = policy.id, agentPersonaType = policy.agentId...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `POST` /api/v1/tenants/{id}/ai-data-permissions/check
+- **Grep Confirmation**: Line 276 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `Map<String, String`
+- **Response Body Schema**: `mapOf( "status" to "error", "error" to decision.decision, "decision" to decision.decisi...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 6. `POST` /api/v1/tenants/{id}/tier
+- **Grep Confirmation**: Line 316 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `Map<String, String`
+- **Response Body Schema**: `mapOf( "status" to "success", "tenantId" to tenantId, "tier" to tier.name, "tierLevel" ...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 7. `POST` /api/v1/tenants/{id}/downgrade
+- **Grep Confirmation**: Line 333 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `Map<String, String`
+- **Response Body Schema**: `mapOf( "status" to "success", "tenantId" to report.tenantId, "previousTier" to report.p...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 8. `GET` /api/v1/tenants/{id}/activity-stream
+- **Grep Confirmation**: Line 355 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `streamItems`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 9. `GET` /api/v1/tenants/{id}/context-fabric/{entityId}
+- **Grep Confirmation**: Line 365 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `fabric`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 10. `POST` /api/v1/tenants/{id}/management-query
+- **Grep Confirmation**: Line 373 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ManagementQueryRequest`
+- **Response Body Schema**: `ManagementQueryResponse( question = req.question, answer = "QUERY DITOLAK: ${blockReaso...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 11. `POST` /api/v1/tenants/{id}/correlate-signals
+- **Grep Confirmation**: Line 510 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `Map<String, String`
+- **Response Body Schema**: `mapOf( "isCorrelated" to result.isCorrelated, "entityReference" to result.entityReferen...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 12. `GET` /api/v1/tenants/{id}/reports/daily
+- **Grep Confirmation**: Line 533 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `report`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 13. `GET` /api/v1/tenants/{id}/knowledge-rules
+- **Grep Confirmation**: Line 541 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `rules`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 14. `POST` /api/v1/tenants/{id}/knowledge-rules
+- **Grep Confirmation**: Line 548 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `KnowledgeRuleCreateRequest`
+- **Response Body Schema**: `created`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 15. `POST` /api/v1/tenants/{id}/knowledge-rules/{ruleId}/approve
+- **Grep Confirmation**: Line 565 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `ruleId, adminUser`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 16. `POST` /api/v1/tenants/{id}/knowledge-rules/fuse
+- **Grep Confirmation**: Line 577 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `Map<String, String`
+- **Response Body Schema**: `fusionResult`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 17. `GET` /api/v1/tenants/{id}/events
+- **Grep Confirmation**: Line 589 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `events`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 18. `POST` /api/v1/tenants/{id}/events
+- **Grep Confirmation**: Line 595 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `AiEventPublishRequest`
+- **Response Body Schema**: `dispatchResult`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 19. `GET` /api/v1/tenants/{id}/finance/cashflow-pressure
+- **Grep Confirmation**: Line 612 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `report`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 20. `GET` /api/v1/tenants/{id}/actions
+- **Grep Confirmation**: Line 619 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `actions`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 21. `POST` /api/v1/tenants/{id}/actions/propose
+- **Grep Confirmation**: Line 625 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ActionProposeRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 22. `POST` /api/v1/tenants/{id}/actions/{actionId}/execute
+- **Grep Confirmation**: Line 639 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `mapOf("error" to "Action $actionId not found"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 23. `GET` /api/v1/tenants/{id}/monitoring-loops
+- **Grep Confirmation**: Line 648 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `loops`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 24. `POST` /api/v1/tenants/{id}/monitoring-loops
+- **Grep Confirmation**: Line 654 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `MonitoringLoopRegisterRequest`
+- **Response Body Schema**: `loop`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 25. `POST` /api/v1/tenants/{id}/monitoring-loops/tick
+- **Grep Confirmation**: Line 670 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `updated`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 26. `GET` /api/v1/tenants/{id}/chief-of-staff/briefings
+- **Grep Confirmation**: Line 677 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( ChiefOfStaffBriefingItem( briefingId = synthesized.id, briefingType = "EXECUTIV...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `chief_of_staff_briefings`
+
+### 27. `POST` /api/v1/tenants/{id}/chief-of-staff/synthesize
+- **Grep Confirmation**: Line 698 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `briefing`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke OrchestrationEngine, ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 28. `POST` /api/v1/tenants/{id}/chief-of-staff/research-directives
+- **Grep Confirmation**: Line 711 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ResearchDirectiveRequest`
+- **Response Body Schema**: `GenericStatusResponse( status = "IN_PROGRESS", id = directiveId, message = req.topic`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `chief_of_staff_briefings`
+
+### 29. `GET` /api/v1/tenants/{id}/agents/{agentId}/skill-confidence
+- **Grep Confirmation**: Line 752 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `AgentSkillConfidenceResponse( agentId = stats.agentId, skillConfidenceScore = stats.ski...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 30. `GET` /api/v1/tenants/{id}/data-quality-issues
+- **Grep Confirmation**: Line 769 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `issues`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 31. `POST` /api/v1/tenants/{id}/chief-of-staff/briefings/generate
+- **Grep Confirmation**: Line 820 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `briefing`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 32. `GET` /api/v1/tenants/{id}/chief-of-staff/research-directives
+- **Grep Confirmation**: Line 827 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `directives`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 33. `POST` /api/v1/tenants/{id}/data-quality-issues/resolve
+- **Grep Confirmation**: Line 834 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ResolveDataQualityIssueRequest`
+- **Response Body Schema**: `mapOf("resolved" to resolved, "issueId" to req.issueId`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 34. `GET` /api/v1/tenants/{id}/project-health/{projectId}
+- **Grep Confirmation**: Line 842 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `report`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 35. `POST` /api/v1/tenants/{id}/project-health/evaluate
+- **Grep Confirmation**: Line 850 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `EvaluateProjectHealthRequest`
+- **Response Body Schema**: `report`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 36. `POST` /api/v1/tenants/{id}/multi-agent-collaborations/initiate
+- **Grep Confirmation**: Line 867 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ai.orchestree.backend.collaboration.MultiAgentCollaborationRequest`
+- **Response Body Schema**: `session`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 37. `GET` /api/v1/tenants/{id}/multi-agent-collaborations
+- **Grep Confirmation**: Line 874 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `collabs`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 38. `GET` /api/v1/tenants/{id}/explainability/{executionId}
+- **Grep Confirmation**: Line 881 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/EnterpriseRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `trace`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke ChiefOfStaffService, ManagementQueryEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 13. Memory Domain - Autonomous Consolidation, Decay & Hybrid Search
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MemoryRoutes.kt`
+- **Jumlah Endpoint**: **6**
+
+### 1. `POST` /api/v1/memory/consolidate/evaluate
+- **Grep Confirmation**: Line 38 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MemoryRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `CandidateInteraction`
+- **Response Body Schema**: `decision`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke MemoryConsolidationEngine, MemoryDecayEngine, HybridVectorKeywordSearchEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `POST` /api/v1/memory/consolidate/batch
+- **Grep Confirmation**: Line 44 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MemoryRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `List<CandidateInteraction`
+- **Response Body Schema**: `decisions`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke MemoryConsolidationEngine, MemoryDecayEngine, HybridVectorKeywordSearchEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `POST` /api/v1/memory/decay
+- **Grep Confirmation**: Line 51 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MemoryRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `DecayMemoryRequest`
+- **Response Body Schema**: `summary`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke MemoryConsolidationEngine, MemoryDecayEngine, HybridVectorKeywordSearchEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `POST` /api/v1/memory/search
+- **Grep Confirmation**: Line 58 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MemoryRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `SearchMemoryRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke MemoryConsolidationEngine, MemoryDecayEngine, HybridVectorKeywordSearchEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `POST` /api/v1/memory/search/ab-compare
+- **Grep Confirmation**: Line 64 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MemoryRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `SearchMemoryRequest`
+- **Response Body Schema**: `comparison`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke MemoryConsolidationEngine, MemoryDecayEngine, HybridVectorKeywordSearchEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 6. `GET` /api/v1/memory/documents
+- **Grep Confirmation**: Line 71 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/MemoryRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `docs`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke MemoryConsolidationEngine, MemoryDecayEngine, HybridVectorKeywordSearchEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 14. Omnichannel & Sales Domain - Channels, CRM, Catalog & Commerce
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Jumlah Endpoint**: **28**
+
+### 1. `GET` /api/v1/tenants/{id}/channel-accounts
+- **Grep Confirmation**: Line 261 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `accounts`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `channel_accounts`
+
+### 2. `POST` /api/v1/tenants/{id}/channel-accounts
+- **Grep Confirmation**: Line 361 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ChannelAccountCreateRequest`
+- **Response Body Schema**: `GenericStatusResponse( status = "ACTIVE", id = newAccountId, message = "Akun saluran ${...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `channel_accounts`
+
+### 3. `POST` /api/v1/tenants/{id}/channel-accounts/{caId}/verify
+- **Grep Confirmation**: Line 402 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `GenericStatusResponse(status = "ACTIVE", id = caId, message = "verified"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `channel_accounts`
+
+### 4. `PATCH` /api/v1/tenants/{id}/channel-accounts/{caId}/approve
+- **Grep Confirmation**: Line 420 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `GenericStatusResponse(status = "ACTIVE", id = caId, message = "approved"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `channel_accounts`
+
+### 5. `GET` /api/v1/tenants/{id}/channel-accounts/{caId}/health
+- **Grep Confirmation**: Line 438 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `ChannelAccountHealthResponse( accountId = caId, isHealthy = isHealthy, details = "Chann...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `channel_accounts`
+
+### 6. `GET` /api/v1/tenants/{id}/credit-wallet
+- **Grep Confirmation**: Line 473 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `CreditWalletResponse( tenantId = tenantId, balance = balance, currency = currency, lowB...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `credit_wallets`
+
+### 7. `GET` /api/v1/tenants/{id}/customers/search
+- **Grep Confirmation**: Line 525 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `results`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `customers`
+
+### 8. `POST` /api/v1/tenants/{id}/customers/resolve
+- **Grep Confirmation**: Line 578 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `Map<String, String`
+- **Response Body Schema**: `profile`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `customers`
+
+### 9. `POST` /api/v1/tenants/{id}/customers/{cust_id}/merge
+- **Grep Confirmation**: Line 592 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `CustomerMergeRequest`
+- **Response Body Schema**: `GenericStatusResponse( status = if (success`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `customers`
+
+### 10. `GET` /api/v1/tenants/{id}/inbox/conversations
+- **Grep Confirmation**: Line 608 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `list`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `conversations, customers`
+
+### 11. `GET` /api/v1/tenants/{id}/leads
+- **Grep Confirmation**: Line 671 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `list`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 12. `POST` /api/v1/tenants/{id}/leads
+- **Grep Confirmation**: Line 710 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `LeadCreateRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "CREATED", id = leadId, message = "Lead dibuat dengan sk...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 13. `GET` /api/v1/tenants/{id}/products
+- **Grep Confirmation**: Line 749 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `list`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `products`
+
+### 14. `POST` /api/v1/tenants/{id}/products
+- **Grep Confirmation**: Line 786 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ProductCreateRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "CREATED", id = prodId, message = "Produk ${req.name} te...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `products`
+
+### 15. `GET` /api/v1/tenants/{id}/inventory
+- **Grep Confirmation**: Line 817 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `list`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 16. `GET` /api/v1/tenants/{id}/inventory/{variantId}
+- **Grep Confirmation**: Line 851 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `resp`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 17. `GET` /api/v1/tenants/{id}/orders
+- **Grep Confirmation**: Line 888 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `list`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `orders`
+
+### 18. `GET` /api/v1/tenants/{id}/campaigns
+- **Grep Confirmation**: Line 930 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `list`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 19. `POST` /api/v1/tenants/{id}/campaigns
+- **Grep Confirmation**: Line 971 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `CampaignCreateRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "SCHEDULED", id = campId, message = req.name`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 20. `GET` /api/v1/tenants/{id}/analytics/revenue-intelligence
+- **Grep Confirmation**: Line 1000 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `RevenueIntelligenceResponse( totalRevenue = totalRev, topChannel = "WHATSAPP_OFFICIAL",...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `orders, order_items`
+
+### 21. `GET` /api/v1/tenants/{id}/analytics/sales-coach
+- **Grep Confirmation**: Line 1054 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `SalesCoachResponse( overallTeamConversion = 26.8, topInsight = "Melakukan konsultasi em...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 22. `POST` /api/v1/tenants/{id}/experiments
+- **Grep Confirmation**: Line 1069 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ExperimentCreateRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "RUNNING", id = expId, message = req.experimentName`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 23. `GET` /api/v1/tenants/{id}/service-requests
+- **Grep Confirmation**: Line 1124 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `list`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `customers, service_requests`
+
+### 24. `POST` /api/v1/tenants/{id}/service-requests
+- **Grep Confirmation**: Line 1160 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ServiceRequestCreateRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "OPEN", id = srId, message = "Tiket $ticketNumber berhas...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `service_requests`
+
+### 25. `PATCH` /api/v1/tenants/{id}/ai-agents/{agentId}/persona
+- **Grep Confirmation**: Line 1194 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `AgentPersonaUpdateRequest`
+- **Response Body Schema**: `GenericStatusResponse(status = "UPDATED", id = agentId, message = "Persona disetel ke $...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `ai_agents`
+
+### 26. `POST` /api/v1/tenants/{id}/conversations/{convId}/persona-reply
+- **Grep Confirmation**: Line 1226 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `PersonaReplyRequest`
+- **Response Body Schema**: `buildJsonObject { put("conversationId", convId`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `conversations, conversation_messages`
+
+### 27. `POST` /api/v1/conversations/{id}/takeover
+- **Grep Confirmation**: Line 1373 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `GenericStatusResponse( status = "HANDED_OVER", id = convId, message = "Percakapan berha...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `conversations, conversation_handovers`
+
+### 28. `POST` /api/v1/carts/{id}/checkout
+- **Grep Confirmation**: Line 1415 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/OmnichannelSalesRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `CheckoutRequest`
+- **Response Body Schema**: `CartCheckoutResponse( cartId = cartId, orderId = orderId, status = "PENDING_PAYMENT", p...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke SalesPersonaEngine, SalesIntentClassifier, ChannelGateway
+- **Tabel Supabase Terpengaruh**: `orders, order_items`
+
+## 15. Billing Domain - Commercial Plans, Credits, Quota & Dunning
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Jumlah Endpoint**: **22**
+
+### 1. `GET` /api/v1/plans/{id}
+- **Grep Confirmation**: Line 83 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Missing plan id"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `GET` /api/v1/plans/entitlements-matrix
+- **Grep Confirmation**: Line 94 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `matrix`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `GET` /api/v1/tenant/entitlements
+- **Grep Confirmation**: Line 109 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `entitlements`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `GET` /api/v1/billing/plans
+- **Grep Confirmation**: Line 126 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `plans`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `GET` /api/v1/billing/plans/{id}
+- **Grep Confirmation**: Line 135 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Missing plan id"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 6. `POST` /api/v1/billing/calculate-cost
+- **Grep Confirmation**: Line 146 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `CreditCostContext`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 7. `POST` /api/v1/billing/subscription/upgrade
+- **Grep Confirmation**: Line 209 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `SubscriptionUpgradeRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 8. `POST` /api/v1/billing/subscription/downgrade
+- **Grep Confirmation**: Line 222 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `SubscriptionDowngradeRequest`
+- **Response Body Schema**: `DowngradeBlockedResponse( status = "blocked", message = "Your current usage exceeds the...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 9. `POST` /api/v1/billing/subscription/cancel
+- **Grep Confirmation**: Line 257 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `CancelSubscriptionResponse(status = "cancelled", subscription = sub`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 10. `GET` /api/v1/billing/credits
+- **Grep Confirmation**: Line 273 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `CreditsDisplayResponse( available = available, reserved = reserved, used = used, total ...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 11. `GET` /api/v1/billing/credits/summary
+- **Grep Confirmation**: Line 298 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `summary`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 12. `GET` /api/v1/billing/credits/ledger
+- **Grep Confirmation**: Line 335 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 13. `GET` /api/v1/billing/ledger
+- **Grep Confirmation**: Line 336 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 14. `POST` /api/v1/billing/credits/topup
+- **Grep Confirmation**: Line 339 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `CreditTopupRequest`
+- **Response Body Schema**: `TopupSuccessResponse( status = "success", tenantId = tenantId, creditsAdded = req.amoun...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 15. `DELETE` /api/v1/billing/seats/{id}
+- **Grep Confirmation**: Line 431 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Missing seat id"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 16. `DELETE` /api/v1/billing/agents/{id}
+- **Grep Confirmation**: Line 513 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Missing agent id"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 17. `GET` /api/v1/billing/invoices/{id}
+- **Grep Confirmation**: Line 545 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Missing invoice id"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 18. `POST` /api/v1/billing/invoices/{id}/fail-dunning
+- **Grep Confirmation**: Line 561 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `Map<String, String`
+- **Response Body Schema**: `mapOf("error" to "Missing invoice id"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 19. `POST` /api/v1/billing/payment
+- **Grep Confirmation**: Line 580 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `PaymentCreateRequest`
+- **Response Body Schema**: `PaymentInitiateResponse( status = "pending", invoiceId = invoice.id, paymentUrl = invoi...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 20. `POST` /api/v1/billing/payment/webhook
+- **Grep Confirmation**: Line 623 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 21. `POST` /api/v1/billing/webhook/midtrans
+- **Grep Confirmation**: Line 624 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: None (No special headers required)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `HttpStatusCode.OK / JSON Payload`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 22. `GET` /api/v1/billing/upgrade-recommendation
+- **Grep Confirmation**: Line 630 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/BillingRoutes.kt`
+- **Header Wajib**: X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `UpgradeRecommendationResponse( level = level, title = title, message = message, suggest...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke CommercialCreditEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+## 16. Admin Domain - Operations, Security, MCP & Financial Command
+- **File Sumber**: `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Jumlah Endpoint**: **89**
+
+### 1. `GET` /api/v1/admin/presence/security-stats
+- **Grep Confirmation**: Line 442 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `stats`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 2. `GET` /api/v1/admin/tenants
+- **Grep Confirmation**: Line 449 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( AdminTenantItem(id = "tenant-corp-001", name = "PT Nusantara Energy", tier = "E...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 3. `POST` /api/v1/admin/tenants
+- **Grep Confirmation**: Line 461 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `AdminTenantCreateRequest`
+- **Response Body Schema**: `AdminTenantCreateResponse( tenantId = "tenant-${java.util.UUID.randomUUID(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 4. `GET` /api/v1/admin/llm-providers
+- **Grep Confirmation**: Line 478 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `AdminDomainStores.llmProviders.toList(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 5. `POST` /api/v1/admin/llm-providers
+- **Grep Confirmation**: Line 482 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `AdminLlmProviderCreateRequest`
+- **Response Body Schema**: `AdminLlmProviderCreateResponse(provider = req.name, type = req.providerType, status = "...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 6. `PUT` /api/v1/admin/llm-providers/{id}
+- **Grep Confirmation**: Line 504 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `AdminLlmProviderCreateRequest`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 7. `DELETE` /api/v1/admin/llm-providers/{id}
+- **Grep Confirmation**: Line 525 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 8. `POST` /api/v1/admin/llm-providers/{id}/toggle-status
+- **Grep Confirmation**: Line 535 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 9. `GET` /api/v1/admin/image-providers
+- **Grep Confirmation**: Line 550 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `AdminDomainStores.imageProviders.toList(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 10. `POST` /api/v1/admin/image-providers
+- **Grep Confirmation**: Line 554 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `AdminImageProviderCreateRequest`
+- **Response Body Schema**: `newImgProv`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 11. `DELETE` /api/v1/admin/image-providers/{id}
+- **Grep Confirmation**: Line 570 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 12. `GET` /api/v1/admin/master-data/categories
+- **Grep Confirmation**: Line 583 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `categories`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `commercial_plans`
+
+### 13. `GET` /api/v1/admin/master-data
+- **Grep Confirmation**: Line 599 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `allItems`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 14. `POST` /api/v1/admin/master-data
+- **Grep Confirmation**: Line 610 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `AdminMasterDataCreateRequest`
+- **Response Body Schema**: `AdminMasterDataCreateResponse(id = item.id, category = req.category, key = req.key, sta...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 15. `DELETE` /api/v1/admin/master-data/{id}
+- **Grep Confirmation**: Line 632 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 16. `DELETE` /api/v1/admin/master-data/{category}/{id}
+- **Grep Confirmation**: Line 648 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `"Missing category"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 17. `GET` /api/v1/admin/skill-plugins
+- **Grep Confirmation**: Line 663 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `all`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 18. `POST` /api/v1/admin/skill-plugins
+- **Grep Confirmation**: Line 711 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `AdminSkillPluginCreateRequest`
+- **Response Body Schema**: `AdminSkillPluginCreateResponse(id = newPlugin.id, name = newPlugin.name, status = newPl...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 19. `PUT` /api/v1/admin/skill-plugins/{id}
+- **Grep Confirmation**: Line 760 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `AdminSkillPluginCreateRequest`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 20. `DELETE` /api/v1/admin/skill-plugins/{id}
+- **Grep Confirmation**: Line 804 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 21. `PATCH` /api/v1/admin/skill-plugins/{id}/status
+- **Grep Confirmation**: Line 820 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `Map<String, String`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 22. `POST` /api/v1/admin/skill-plugins/upload
+- **Grep Confirmation**: Line 845 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `AdminSkillPluginUploadRequest`
+- **Response Body Schema**: `AdminSkillPluginUploadResponse( success = true, pluginId = newPlugin.id, pluginName = n...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 23. `GET` /api/v1/admin/mcp-tools
+- **Grep Confirmation**: Line 926 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `all`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `mcp_tools`
+
+### 24. `POST` /api/v1/admin/mcp-tools
+- **Grep Confirmation**: Line 959 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `AdminMcpToolCreateRequest`
+- **Response Body Schema**: `AdminMcpToolCreateResponse(toolName = req.name, riskLevel = req.riskLevel, status = "RE...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `mcp_tools`
+
+### 25. `PUT` /api/v1/admin/mcp-tools/{id}
+- **Grep Confirmation**: Line 1018 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `AdminMcpToolCreateRequest`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `mcp_tools`
+
+### 26. `DELETE` /api/v1/admin/mcp-tools/{id}
+- **Grep Confirmation**: Line 1061 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `mcp_tools`
+
+### 27. `PATCH` /api/v1/admin/mcp-tools/{id}/kill-switch
+- **Grep Confirmation**: Line 1078 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `mcp_tools`
+
+### 28. `GET` /api/v1/admin/app-registry
+- **Grep Confirmation**: Line 1117 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `AdminDomainStores.appRegistry.toList(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 29. `POST` /api/v1/admin/app-registry
+- **Grep Confirmation**: Line 1121 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `AdminAppRegistryCreateRequest`
+- **Response Body Schema**: `AdminAppRegistryCreateResponse(id = newApp.id, appName = req.appName, status = "REGISTE...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 30. `PUT` /api/v1/admin/app-registry/{id}
+- **Grep Confirmation**: Line 1141 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `AdminAppRegistryCreateRequest`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 31. `DELETE` /api/v1/admin/app-registry/{id}
+- **Grep Confirmation**: Line 1162 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 32. `PATCH` /api/v1/admin/app-registry/{id}/mark-migration
+- **Grep Confirmation**: Line 1172 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `Map<String, String`
+- **Response Body Schema**: `"Missing ID"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 33. `GET` /api/v1/admin/analytics/tenant-workforce-summary
+- **Grep Confirmation**: Line 1193 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `summary`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 34. `GET` /api/v1/admin/monitoring/system-overview
+- **Grep Confirmation**: Line 1219 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `overview`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 35. `GET` /api/v1/admin/audit-logs
+- **Grep Confirmation**: Line 1263 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `dbLogs`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 36. `GET` /api/v1/admin/usage
+- **Grep Confirmation**: Line 1324 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `AdminUsageAnalyticsResponse( groupBy = groupBy, totalTokens = totalTokens, totalCostUsd...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 37. `GET` /api/v1/admin/llm-usage
+- **Grep Confirmation**: Line 1347 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `LlmUsageSummaryResponse( totalTokens = llmSummary.total_tokens.toInt(`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 38. `GET` /api/v1/admin/health-check
+- **Grep Confirmation**: Line 1361 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `AdminHealthResponse( status = if (allHealthy`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 39. `POST` /api/v1/admin/jobs/trigger
+- **Grep Confirmation**: Line 1382 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `TriggerJobApiRequest`
+- **Response Body Schema**: `AdminJobTriggerResponse( jobName = req.jobName, tenantId = req.tenantId, status = log.s...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 40. `GET` /api/v1/admin/billing/subscriptions
+- **Grep Confirmation**: Line 1401 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 41. `GET` /api/v1/admin/billing/invoices
+- **Grep Confirmation**: Line 1454 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `invoices`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 42. `GET` /api/v1/admin/specialist-agents
+- **Grep Confirmation**: Line 1493 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `agents`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `ai_agents`
+
+### 43. `GET` /api/v1/admin/studio/templates
+- **Grep Confirmation**: Line 1545 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `listOf( AdminStudioTemplateItem( id = "tpl-01", templateCode = "MODERN_CORPORATE", temp...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 44. `GET` /api/v1/admin/dead-letter-queue
+- **Grep Confirmation**: Line 1568 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 45. `POST` /api/v1/admin/dead-letter-queue/{id}/reprocess
+- **Grep Confirmation**: Line 1575 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `mapOf("error" to "Item id is required"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 46. `POST` /api/v1/admin/workflow-executions/{id}/replay
+- **Grep Confirmation**: Line 1606 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `mapOf("error" to "Workflow execution ID is required"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 47. `GET` /api/v1/admin/workflow-executions
+- **Grep Confirmation**: Line 1629 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `executions`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 48. `GET` /api/v1/admin/analytics/overview
+- **Grep Confirmation**: Line 1643 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `overview`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 49. `GET` /api/v1/admin/analytics/usage-credit
+- **Grep Confirmation**: Line 1651 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `usageList`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 50. `GET` /api/v1/admin/analytics/llm-usage-platform-wide
+- **Grep Confirmation**: Line 1659 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `llmUsage`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 51. `GET` /api/v1/admin/analytics/kpi-summary
+- **Grep Confirmation**: Line 1667 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `kpi`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 52. `GET` /api/v1/admin/analytics/daily-task-performance
+- **Grep Confirmation**: Line 1675 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `metrics`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 53. `GET` /api/v1/admin/analytics/task-activity-summary
+- **Grep Confirmation**: Line 1686 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `summary`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 54. `GET` /api/v1/admin/analytics/universal-selection-usage
+- **Grep Confirmation**: Line 1697 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `usage`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 55. `POST` /api/v1/admin/analytics/transactions
+- **Grep Confirmation**: Line 1704 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `AdminRecordTransactionRequest`
+- **Response Body Schema**: `mapOf( "status" to "RECORDED", "orderId" to order.id, "orderNumber" to order.orderNumbe...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 56. `GET` /api/v1/admin/payment-reconciliation/orders
+- **Grep Confirmation**: Line 1736 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `dtoList`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `orders`
+
+### 57. `GET` /api/v1/admin/payment-reconciliation/queue
+- **Grep Confirmation**: Line 1770 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `items`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 58. `POST` /api/v1/admin/payment-reconciliation/{id}/confirm
+- **Grep Confirmation**: Line 1783 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `ConfirmPaymentReconciliationRequest`
+- **Response Body Schema**: `mapOf("error" to "Missing id"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 59. `POST` /api/v1/admin/payment-reconciliation/{id}/reject
+- **Grep Confirmation**: Line 1863 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `RejectPaymentReconciliationRequest`
+- **Response Body Schema**: `mapOf("error" to "Missing id"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 60. `POST` /api/v1/admin/payment-reconciliation/trigger-check
+- **Grep Confirmation**: Line 1919 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `mapOf( "status" to "COMPLETED", "checkedCount" to res.checkedCount, "autoReconciledCoun...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 61. `POST` /api/v1/admin/payment-reconciliation/simulate-stuck
+- **Grep Confirmation**: Line 1935 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `JSON Object / Request Body`
+- **Response Body Schema**: `mapOf( "status" to "SIMULATED", // allowed: drill status indicator "orderId" to testOrd...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 62. `GET` /api/v1/admin/commercial/plans
+- **Grep Confirmation**: Line 1996 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `plans`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 63. `POST` /api/v1/admin/commercial/plans
+- **Grep Confirmation**: Line 2006 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `CommercialPlanUpsertRequest`
+- **Response Body Schema**: `saved`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 64. `DELETE` /api/v1/admin/commercial/plans/{id}
+- **Grep Confirmation**: Line 2031 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Missing id"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 65. `GET` /api/v1/admin/commercial/entitlements-matrix
+- **Grep Confirmation**: Line 2043 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `matrix`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 66. `POST` /api/v1/admin/commercial/entitlements
+- **Grep Confirmation**: Line 2053 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `EntitlementUpdateRequest`
+- **Response Body Schema**: `mapOf("success" to ok`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 67. `GET` /api/v1/admin/commercial/custom-override/{tenantId}
+- **Grep Confirmation**: Line 2065 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Missing tenantId"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 68. `POST` /api/v1/admin/commercial/custom-override/{tenantId}
+- **Grep Confirmation**: Line 2076 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `TenantCustomOverrideRequest`
+- **Response Body Schema**: `mapOf("error" to "Missing tenantId"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 69. `GET` /api/v1/admin/commercial/metering-rules
+- **Grep Confirmation**: Line 2089 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `rules`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 70. `POST` /api/v1/admin/commercial/metering-rules
+- **Grep Confirmation**: Line 2099 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `CreditMeteringRule`
+- **Response Body Schema**: `saved`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 71. `DELETE` /api/v1/admin/commercial/metering-rules/{activityType}
+- **Grep Confirmation**: Line 2110 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Missing activityType"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 72. `GET` /api/v1/admin/commercial/cost-factors
+- **Grep Confirmation**: Line 2122 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `factors`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 73. `POST` /api/v1/admin/commercial/cost-factors
+- **Grep Confirmation**: Line 2132 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `CreditCostFactor`
+- **Response Body Schema**: `saved`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 74. `DELETE` /api/v1/admin/commercial/cost-factors/{factorType}/{factorKey}
+- **Grep Confirmation**: Line 2143 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Missing factorType"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 75. `POST` /api/v1/admin/commercial/simulate-cost
+- **Grep Confirmation**: Line 2156 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `CreditCostContext`
+- **Response Body Schema**: `res`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 76. `POST` /api/v1/admin/billing/credit-adjustment
+- **Grep Confirmation**: Line 2172 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `ManualCreditAdjustmentRequest`
+- **Response Body Schema**: `ManualCreditAdjustmentResponse( status = "success", tenantId = req.tenantId, amount = r...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 77. `GET` /api/v1/admin/billing/tenant-wallet/{tenantId}
+- **Grep Confirmation**: Line 2203 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid> (or path parameter)
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Missing tenantId"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 78. `GET` /api/v1/admin/financial-command-center
+- **Grep Confirmation**: Line 2228 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `data`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 79. `GET` /api/v1/admin/analytics/financial-command-center
+- **Grep Confirmation**: Line 2238 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `data`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 80. `POST` /api/v1/admin/platform-assets/icon-logo
+- **Grep Confirmation**: Line 2253 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `ai.orchestree.backend.api.BrandLogoUploadRequest`
+- **Response Body Schema**: `result`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 81. `GET` /api/v1/admin/platform-assets/icon-logo
+- **Grep Confirmation**: Line 2268 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("platformIconLogoUrl" to (url ?: ""`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 82. `GET` /api/v1/admin/security/ip-allowlist
+- **Grep Confirmation**: Line 2276 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `AdminIpAllowlistDto(enabled = enabled, allowedIps = ips`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 83. `POST` /api/v1/admin/security/ip-allowlist
+- **Grep Confirmation**: Line 2282 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>, X-Tenant-Id: <tenant-uuid>
+- **Request Body Schema**: `AdminIpAllowlistDto`
+- **Response Body Schema**: `req`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 84. `POST` /api/v1/admin/support/impersonate
+- **Grep Confirmation**: Line 2302 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `AdminSupportImpersonateRequest`
+- **Response Body Schema**: `AdminSupportSessionResponse( sessionId = session.sessionId, operatorId = session.operat...`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 85. `GET` /api/v1/admin/support/impersonate/{sessionId}
+- **Grep Confirmation**: Line 2327 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("error" to "Session not found or expired"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 86. `GET` /api/v1/admin/security/csrf-token
+- **Grep Confirmation**: Line 2353 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `None (No Request Body)`
+- **Response Body Schema**: `mapOf("csrfToken" to token`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 87. `POST` /api/v1/admin/login
+- **Grep Confirmation**: Line 2367 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `AdminLoginRequest`
+- **Response Body Schema**: `mapOf("error" to "IP Access Forbidden by Super Admin Allowlist policy"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 88. `POST` /api/v1/admin/auth/login
+- **Grep Confirmation**: Line 2432 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `AdminLoginRequest`
+- **Response Body Schema**: `mapOf("error" to "IP Access Forbidden by Super Admin Allowlist policy"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
+
+### 89. `POST` /api/v1/admin/auth/verify-mfa
+- **Grep Confirmation**: Line 2474 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AdminRoutes.kt`
+- **Header Wajib**: Authorization: Bearer <Supabase_JWT>
+- **Request Body Schema**: `AdminVerifyMfaRequest`
+- **Response Body Schema**: `mapOf("error" to "IP Access Forbidden by Super Admin Allowlist policy"`
+- **Status Engine Terhubung**: Ya — Terkoneksi ke DeadLetterQueueRepository, SchedulerEngine, PaymentReconciliationEngine
+- **Tabel Supabase Terpengaruh**: `Stateless / Query View / Database Transaction`
