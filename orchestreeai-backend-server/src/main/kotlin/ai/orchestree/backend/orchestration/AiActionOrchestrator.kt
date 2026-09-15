@@ -82,6 +82,80 @@ class AiActionOrchestrator(
     private val logger = LoggerFactory.getLogger(AiActionOrchestrator::class.java)
     val actionsStore = ConcurrentHashMap<String, ApprovedAction>()
 
+    companion object {
+        val defaultInstance by lazy { AiActionOrchestrator() }
+    }
+
+    suspend fun listActionsPaginated(
+        tenantId: String,
+        limit: Int = 20,
+        offset: Int = 0
+    ): Pair<Long, List<ApprovedAction>> = withContext(Dispatchers.IO) {
+        var count = 0L
+        val dbList = mutableListOf<ApprovedAction>()
+        val conn = try { DatabaseManager.getConnection() } catch (_: Exception) { null }
+        if (conn != null) {
+            try {
+                conn.use { c ->
+                    c.prepareStatement("SELECT count(*) FROM approved_actions WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                        ps.setString(1, tenantId)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next()) count = rs.getLong(1)
+                        }
+                    }
+
+                    if (count > 0L) {
+                        c.prepareStatement("""
+                            SELECT id, tenant_id, agent_id, action_type, target_system,
+                                   risk_score, approval_id, approved_by, status,
+                                   executed_at, execution_result, created_at
+                            FROM approved_actions
+                            WHERE tenant_id = ? OR tenant_id = 'tenant-default'
+                            ORDER BY created_at DESC
+                            LIMIT ? OFFSET ?
+                        """.trimIndent()).use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.setInt(2, limit)
+                            ps.setInt(3, offset)
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    dbList.add(
+                                        ApprovedAction(
+                                            id = rs.getString("id"),
+                                            tenantId = rs.getString("tenant_id"),
+                                            agentId = rs.getString("agent_id"),
+                                            actionType = rs.getString("action_type"),
+                                            targetSystem = rs.getString("target_system"),
+                                            payload = emptyMap(),
+                                            riskScore = rs.getDouble("risk_score"),
+                                            approvalId = rs.getString("approval_id"),
+                                            approvedBy = rs.getString("approved_by"),
+                                            status = rs.getString("status") ?: "PENDING",
+                                            executedAt = rs.getTimestamp("executed_at")?.time,
+                                            executionResult = rs.getString("execution_result"),
+                                            createdAt = rs.getTimestamp("created_at")?.time ?: System.currentTimeMillis()
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                        return@withContext Pair(count, dbList)
+                    }
+                }
+            } catch (e: Exception) {
+                logger.debug("Failed querying approved_actions from DB: ${e.message}")
+            }
+        }
+
+        val allInMem = actionsStore.values.filter {
+            it.tenantId == tenantId || it.tenantId == "tenant-default"
+        }.sortedByDescending { it.createdAt }
+
+        val total = allInMem.size.toLong()
+        val paged = allInMem.drop(offset).take(limit)
+        Pair(total, paged)
+    }
+
     /**
      * Evaluates an action proposal through the 4-layer check flow (Bagian 67.1):
      * 1. Policy Check

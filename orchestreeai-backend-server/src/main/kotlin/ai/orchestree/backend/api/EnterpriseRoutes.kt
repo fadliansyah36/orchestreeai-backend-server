@@ -199,11 +199,12 @@ fun Route.enterpriseRoutes() {
     val promptGuard = ai.orchestree.backend.security.PromptInjectionGuard()
     val managementSessionCache = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<Pair<String, String>>>()
 
-    val aiActionOrchestrator = ai.orchestree.backend.orchestration.AiActionOrchestrator()
+    val aiActionOrchestrator = ai.orchestree.backend.orchestration.AiActionOrchestrator.defaultInstance
     val monitoringLoopEngine = ai.orchestree.backend.orchestration.MonitoringLoopEngine()
     val financeIntelligenceService = ai.orchestree.backend.intelligence.AiFinanceIntelligenceService()
     val knowledgeFusionEngine = ai.orchestree.backend.intelligence.KnowledgeOperationalFusionEngine()
-    val aiEventEngine = ai.orchestree.backend.events.AiEventEngine()
+    val aiEventEngine = ai.orchestree.backend.events.AiEventEngine.defaultInstance
+    val creditRepoManager = ai.orchestree.backend.billing.CreditRepositoryManager()
     val specialistCollaborationService = ai.orchestree.backend.collaboration.SpecialistAgentCollaborationService()
     val dataQualityGovernanceService = ai.orchestree.backend.governance.DataQualityGovernanceService()
 
@@ -601,6 +602,19 @@ fun Route.enterpriseRoutes() {
             call.respond(HttpStatusCode.OK, PagedResponse(items = events, total = total, limit = limit, offset = offset))
         }
 
+        // Billing Invoices Alias (Client path: /api/v1/tenants/{id}/billing/invoices)
+        get("/billing/invoices") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            try {
+                val (total, invoices) = creditRepoManager.getInvoicesPaginated(tenantId, limit, offset)
+                call.respond(HttpStatusCode.OK, PagedResponse(items = invoices, total = total, limit = limit, offset = offset))
+            } catch (e: Exception) {
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Failed to get invoices")))
+            }
+        }
+
         post("/events") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
             val req = call.receive<AiEventPublishRequest>()
@@ -629,9 +643,7 @@ fun Route.enterpriseRoutes() {
             val tenantId = call.parameters["id"] ?: "tenant-default"
             val limit = PaginationDefaults.parseLimit(call)
             val offset = PaginationDefaults.parseOffset(call)
-            val allActions = aiActionOrchestrator.actionsStore.values.filter { it.tenantId == tenantId || it.tenantId == "tenant-default" }
-            val total = allActions.size.toLong()
-            val paged = allActions.drop(offset).take(limit)
+            val (total, paged) = aiActionOrchestrator.listActionsPaginated(tenantId, limit, offset)
             call.respond(HttpStatusCode.OK, PagedResponse(items = paged, total = total, limit = limit, offset = offset))
         }
 
@@ -711,7 +723,7 @@ fun Route.enterpriseRoutes() {
         }
 
         // AI Chief of Staff Briefings (PRD Addendum 2 Bagian 73, 78.1)
-        get("/chief-of-staff/briefings") {
+        val handleBriefings: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { call ->
             val tenantId = call.parameters["id"] ?: "tenant-default"
             val limit = PaginationDefaults.parseLimit(call)
             val offset = PaginationDefaults.parseOffset(call)
@@ -768,6 +780,9 @@ fun Route.enterpriseRoutes() {
             }
             call.respond(HttpStatusCode.OK, PagedResponse(items = list, total = count, limit = limit, offset = offset))
         }
+
+        get("/chief-of-staff/briefings") { handleBriefings(call) }
+        get("/briefings") { handleBriefings(call) }
 
         post("/chief-of-staff/synthesize") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
@@ -840,7 +855,7 @@ fun Route.enterpriseRoutes() {
         }
 
         // Data Quality & Conflict Detection (PRD Addendum 2 Bagian 76, 78.1)
-        get("/data-quality-issues") {
+        val handleDataQualityIssues: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { call ->
             val tenantId = call.parameters["id"] ?: "tenant-default"
             val limit = PaginationDefaults.parseLimit(call)
             val offset = PaginationDefaults.parseOffset(call)
@@ -906,6 +921,9 @@ fun Route.enterpriseRoutes() {
             }
             call.respond(HttpStatusCode.OK, PagedResponse(items = issues, total = count, limit = limit, offset = offset))
         }
+
+        get("/data-quality-issues") { handleDataQualityIssues(call) }
+        get("/data-quality/issues") { handleDataQualityIssues(call) }
 
         // PRD Bagian 78.1: Fase 2B.4 Endpoints
         // 1. Chief of Staff Briefings Generation

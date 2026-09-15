@@ -52,11 +52,22 @@ fun Route.billingRoutes(
             )
             return null
         }
-        val tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
-            ?: this.parameters["tenantId"]
-            ?: this.request.headers["X-Tenant-ID"]
-            ?: this.request.headers["X-Tenant-Id"]
-            ?: this.request.queryParameters["tenant_id"]
+        var tenantId = principal?.payload?.getClaim("tenant_id")?.asString()
+        if (tenantId.isNullOrBlank() && authHeader != null && authHeader.startsWith("Bearer ")) {
+            val token = authHeader.removePrefix("Bearer ").trim()
+            try {
+                val decoded = com.auth0.jwt.JWT.decode(token)
+                tenantId = decoded.getClaim("tenant_id")?.asString()
+            } catch (_: Exception) {}
+        }
+
+        if (tenantId.isNullOrBlank()) {
+            tenantId = this.parameters["tenantId"]
+                ?: this.parameters["id"]
+                ?: this.request.headers["X-Tenant-ID"]
+                ?: this.request.headers["X-Tenant-Id"]
+                ?: this.request.queryParameters["tenant_id"]
+        }
 
         if (tenantId.isNullOrBlank()) {
             this.respond(

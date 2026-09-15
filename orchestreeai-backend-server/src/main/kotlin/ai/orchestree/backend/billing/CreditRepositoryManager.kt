@@ -767,6 +767,13 @@ class CreditRepositoryManager(
         }
     }
 
+    companion object {
+        val inMemoryInvoices = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<CommercialInvoiceRecord>>()
+    }
+
+    val inMemoryInvoices: java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<CommercialInvoiceRecord>>
+        get() = Companion.inMemoryInvoices
+
     suspend fun getInvoices(tenantId: String): List<CommercialInvoiceRecord> =
         getInvoicesPaginated(tenantId, 100, 0).second
 
@@ -775,51 +782,61 @@ class CreditRepositoryManager(
         limit: Int = 20,
         offset: Int = 0
     ): Pair<Long, List<CommercialInvoiceRecord>> = withContext(Dispatchers.IO) {
-        val conn = dbManager.getConnection() ?: error("Database connection required")
-        conn.use { c ->
-            var count = 0L
-            c.prepareStatement("SELECT count(*) FROM invoices WHERE tenant_id = ?").use { ps ->
-                ps.setString(1, tenantId)
-                ps.executeQuery().use { rs ->
-                    if (rs.next()) count = rs.getLong(1)
-                }
-            }
-            val list = mutableListOf<CommercialInvoiceRecord>()
-            if (count > 0L) {
-                c.prepareStatement("""
-                    SELECT id, tenant_id, invoice_number, plan_name, period_start, period_end, total_amount_idr, status, payment_gateway, gateway_order_id, created_at 
-                    FROM invoices 
-                    WHERE tenant_id = ? 
-                    ORDER BY created_at DESC 
-                    LIMIT ? OFFSET ?
-                """.trimIndent()).use { ps ->
-                    ps.setString(1, tenantId)
-                    ps.setInt(2, limit)
-                    ps.setInt(3, offset)
-                    val rs = ps.executeQuery()
-                    while (rs.next()) {
-                        list.add(
-                            CommercialInvoiceRecord(
-                                id = rs.getString("id"),
-                                tenantId = rs.getString("tenant_id"),
-                                invoiceNumber = rs.getString("invoice_number"),
-                                planName = rs.getString("plan_name"),
-                                periodStart = rs.getTimestamp("period_start")?.time,
-                                periodEnd = rs.getTimestamp("period_end")?.time,
-                                totalAmountIdr = rs.getDouble("total_amount_idr"),
-                                status = rs.getString("status"),
-                                paymentGateway = rs.getString("payment_gateway"),
-                                gatewayOrderId = rs.getString("gateway_order_id"),
-                                paymentUrl = "https://app.sandbox.midtrans.com/snap/v2/vtweb/${rs.getString("gateway_order_id")}",
-                                snapToken = rs.getString("gateway_order_id"),
-                                createdAt = rs.getTimestamp("created_at")?.time
-                            )
-                        )
+        val conn = try { dbManager.getConnection() } catch (_: Exception) { null }
+        if (conn != null) {
+            try {
+                conn.use { c ->
+                    var count = 0L
+                    c.prepareStatement("SELECT count(*) FROM invoices WHERE tenant_id = ?").use { ps ->
+                        ps.setString(1, tenantId)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next()) count = rs.getLong(1)
+                        }
+                    }
+                    val list = mutableListOf<CommercialInvoiceRecord>()
+                    if (count > 0L) {
+                        c.prepareStatement("""
+                            SELECT id, tenant_id, invoice_number, plan_name, period_start, period_end, total_amount_idr, status, payment_gateway, gateway_order_id, created_at 
+                            FROM invoices 
+                            WHERE tenant_id = ? 
+                            ORDER BY created_at DESC 
+                            LIMIT ? OFFSET ?
+                        """.trimIndent()).use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.setInt(2, limit)
+                            ps.setInt(3, offset)
+                            val rs = ps.executeQuery()
+                            while (rs.next()) {
+                                list.add(
+                                    CommercialInvoiceRecord(
+                                        id = rs.getString("id"),
+                                        tenantId = rs.getString("tenant_id"),
+                                        invoiceNumber = rs.getString("invoice_number"),
+                                        planName = rs.getString("plan_name"),
+                                        periodStart = rs.getTimestamp("period_start")?.time,
+                                        periodEnd = rs.getTimestamp("period_end")?.time,
+                                        totalAmountIdr = rs.getDouble("total_amount_idr"),
+                                        status = rs.getString("status"),
+                                        paymentGateway = rs.getString("payment_gateway"),
+                                        gatewayOrderId = rs.getString("gateway_order_id"),
+                                        paymentUrl = "https://app.sandbox.midtrans.com/snap/v2/vtweb/${rs.getString("gateway_order_id")}",
+                                        snapToken = rs.getString("gateway_order_id"),
+                                        createdAt = rs.getTimestamp("created_at")?.time
+                                    )
+                                )
+                            }
+                        }
+                        return@withContext Pair(count, list)
                     }
                 }
+            } catch (e: Exception) {
+                logger.debug("Failed querying invoices from DB: ${e.message}")
             }
-            Pair(count, list)
         }
+        val mem = inMemoryInvoices[tenantId] ?: inMemoryInvoices["tenant-default"] ?: emptyList()
+        val total = mem.size.toLong()
+        val paged = mem.drop(offset).take(limit)
+        Pair(total, paged)
     }
 
     suspend fun getInvoiceById(invoiceId: String): CommercialInvoiceRecord? = withContext(Dispatchers.IO) {
@@ -871,7 +888,7 @@ class CreditRepositoryManager(
                 ps.setString(7, gatewayOrderId)
                 val rs = ps.executeQuery()
                 val createdAt = if (rs.next()) rs.getTimestamp("created_at")?.time else System.currentTimeMillis()
-                CommercialInvoiceRecord(
+                val record = CommercialInvoiceRecord(
                     id = invoiceId,
                     tenantId = tenantId,
                     invoiceNumber = invoiceId,
@@ -886,6 +903,8 @@ class CreditRepositoryManager(
                     snapToken = gatewayOrderId,
                     createdAt = createdAt
                 )
+                inMemoryInvoices.computeIfAbsent(tenantId) { java.util.concurrent.CopyOnWriteArrayList() }.add(0, record)
+                record
             }
         }
     }

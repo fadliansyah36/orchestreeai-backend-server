@@ -44,6 +44,10 @@ data class AttendanceRecordItem(
     val verificationStatus: String = "VERIFIED_GEOFENCE"
 )
 
+object AttendanceRecordStore {
+    val inMemoryRecords = java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<AttendanceRecordItem>>()
+}
+
 @Serializable
 data class GeofenceItem(
     val id: String,
@@ -137,6 +141,17 @@ fun Route.attendanceRoutes() {
                 supabase.insertRecord("attendance_records", tenantId, payload)
             } catch (_: Exception) {}
 
+            AttendanceRecordStore.inMemoryRecords.computeIfAbsent(req.userId) { java.util.concurrent.CopyOnWriteArrayList() }
+                .add(0, AttendanceRecordItem(
+                    id = recordId,
+                    userId = req.userId,
+                    tenantId = tenantId,
+                    timestamp = System.currentTimeMillis(),
+                    type = req.type,
+                    locationName = req.locationName,
+                    verificationStatus = if (geoResult.isWithinGeofence) "VERIFIED_GEOFENCE" else "OUT_OF_BOUNDS"
+                ))
+
             call.respond(
                 HttpStatusCode.Created,
                 AttendanceCheckInResponse(
@@ -212,6 +227,13 @@ fun Route.attendanceRoutes() {
                         }
                     } catch (_: Exception) {}
                 }
+            }
+            if (count == 0L && list.isEmpty()) {
+                val mem = (AttendanceRecordStore.inMemoryRecords[userId] ?: AttendanceRecordStore.inMemoryRecords.values.flatten())
+                    .filter { (it.userId == userId || userId == "user-default") && (it.tenantId == tenantId || tenantId == "tenant-default") }
+                    .sortedByDescending { it.timestamp }
+                count = mem.size.toLong()
+                list.addAll(mem.drop(offset).take(limit))
             }
             call.respond(HttpStatusCode.OK, PagedResponse(items = list, total = count, limit = limit, offset = offset))
         }

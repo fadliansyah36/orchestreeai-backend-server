@@ -21,7 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 object CompanyActivityStreamService {
     private val logger = LoggerFactory.getLogger(CompanyActivityStreamService::class.java)
     private val supabase = SupabaseClientProvider.fromEnv()
-    private val inMemoryStream = ConcurrentHashMap<String, CopyOnWriteArrayList<EnterpriseActivityStreamItem>>()
+    val inMemoryStream = ConcurrentHashMap<String, CopyOnWriteArrayList<EnterpriseActivityStreamItem>>()
 
     /**
      * Synchronous in-memory access for quick context resolution.

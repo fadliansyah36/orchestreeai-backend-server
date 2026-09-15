@@ -331,7 +331,7 @@ class PaginationVerificationTest {
 
         // Generate 30 stream items with ascending timestamp so item 30 is newest
         val streamItems = (1..30).map { i ->
-            ai.orchestree.backend.enterprise.EnterpriseActivityStreamItem(
+            ai.orchestree.backend.api.EnterpriseActivityStreamItem(
                 id = "act-$testTenantId-$i",
                 sourceSystem = "SAP_ERP",
                 summaryText = "Enterprise stream event #$i",
@@ -390,20 +390,22 @@ class PaginationVerificationTest {
         val now = System.currentTimeMillis()
 
         // Generate 30 presence logs
-        for (i in 1..30) {
-            ai.orchestree.backend.security.PresenceService.defaultInstance.presenceCheckLogRepo.insertLog(
-                ai.orchestree.backend.database.repositories.presence.PresenceCheckLog(
-                    id = "log-$testUserId-$i",
-                    userId = testUserId,
-                    checkType = "PERIODIC",
-                    methodUsed = "FACE_PASSIVE",
-                    verificationResult = "VERIFIED",
-                    deviceId = "device-$i",
-                    ipAddress = "192.168.1.$i",
-                    locationApprox = "Jakarta HQ",
-                    checkedAt = now - (31 - i) * 1000L
+        runBlocking {
+            for (i in 1..30) {
+                ai.orchestree.backend.security.PresenceService.defaultInstance.presenceCheckLogRepo.insert(
+                    ai.orchestree.backend.models.PresenceCheckLog(
+                        id = "log-$testUserId-$i",
+                        userId = testUserId,
+                        checkType = "PERIODIC",
+                        methodUsed = "FACE_PASSIVE",
+                        verificationResult = "VERIFIED",
+                        deviceId = "device-$i",
+                        ipAddress = "192.168.1.$i",
+                        locationApprox = "Jakarta HQ",
+                        checkedAt = now - (31 - i) * 1000L
+                    )
                 )
-            )
+            }
         }
 
         // 1. Fetch Page 1: limit 10, offset 0
@@ -504,7 +506,8 @@ class PaginationVerificationTest {
         val memoryRepo = ai.orchestree.backend.database.repositories.memory.MemoryDocumentRepository()
 
         for (i in 1..30) {
-            memoryRepo.inMemoryStore.computeIfAbsent(testTenantId) { java.util.concurrent.CopyOnWriteArrayList() }
+            ai.orchestree.backend.database.repositories.memory.MemoryDocumentRepository.inMemoryStore
+                .computeIfAbsent(testTenantId) { java.util.concurrent.CopyOnWriteArrayList() }
                 .add(
                     ai.orchestree.backend.database.repositories.memory.MemoryDocumentRecord(
                         id = "mem-doc-$testTenantId-$i",
@@ -526,6 +529,258 @@ class PaginationVerificationTest {
         val page1Ids = page1.map { it.id }.toSet()
         val page2Ids = page2.map { it.id }.toSet()
         assertTrue(page1Ids.intersect(page2Ids).isEmpty())
+    }
+
+    @Test
+    fun testActionsPaginationWithOver25Items() = testApplication {
+        application {
+            module()
+        }
+
+        val testTenantId = "tenant-act-${UUID.randomUUID().toString().take(8)}"
+        val token = generateToken(testTenantId)
+        val orchestrator = ai.orchestree.backend.orchestration.AiActionOrchestrator.defaultInstance
+
+        // Pre-populate 30 actions
+        val now = System.currentTimeMillis()
+        for (i in 1..30) {
+            val actionId = "act-$testTenantId-$i"
+            orchestrator.actionsStore[actionId] = ai.orchestree.backend.orchestration.ApprovedAction(
+                id = actionId,
+                tenantId = testTenantId,
+                agentId = "agent-test",
+                actionType = "CREATE_TASK",
+                targetSystem = "TASK_BOARD",
+                payload = mapOf("index" to i.toString()),
+                approvedBy = "user-admin",
+                createdAt = now - (30 - i) * 1000L
+            )
+        }
+
+        // Request Page 1 (limit=10, offset=0)
+        val response1 = client.get("/api/v1/tenants/$testTenantId/actions?limit=10&offset=0") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, response1.status)
+        val body1 = Json.parseToJsonElement(response1.bodyAsText()).jsonObject
+        val total1 = body1["total"]?.jsonPrimitive?.long
+        val limit1 = body1["limit"]?.jsonPrimitive?.int
+        val offset1 = body1["offset"]?.jsonPrimitive?.int
+        val items1 = body1["items"]?.jsonArray
+
+        assertNotNull(total1)
+        assertEquals(30L, total1)
+        assertEquals(10, limit1)
+        assertEquals(0, offset1)
+        assertNotNull(items1)
+        assertEquals(10, items1.size)
+
+        // Request Page 2 (limit=10, offset=10)
+        val response2 = client.get("/api/v1/tenants/$testTenantId/actions?limit=10&offset=10") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, response2.status)
+        val body2 = Json.parseToJsonElement(response2.bodyAsText()).jsonObject
+        val limit2 = body2["limit"]?.jsonPrimitive?.int
+        val offset2 = body2["offset"]?.jsonPrimitive?.int
+        val items2 = body2["items"]?.jsonArray
+
+        assertEquals(10, limit2)
+        assertEquals(10, offset2)
+        assertNotNull(items2)
+        assertEquals(10, items2.size)
+
+        // Ensure zero overlap between Page 1 and Page 2
+        val page1Ids = items1.map { it.jsonObject["id"]?.jsonPrimitive?.content }.toSet()
+        val page2Ids = items2.map { it.jsonObject["id"]?.jsonPrimitive?.content }.toSet()
+        assertTrue(page1Ids.intersect(page2Ids).isEmpty(), "Page 1 and Page 2 must not have overlapping actions")
+    }
+
+    @Test
+    fun testChiefOfStaffBriefingsPagination() = testApplication {
+        application {
+            module()
+        }
+
+        val testTenantId = "tenant-cos-${UUID.randomUUID().toString().take(8)}"
+        val token = generateToken(testTenantId)
+
+        // Test canonical route: /api/v1/tenants/{id}/chief-of-staff/briefings
+        val res1 = client.get("/api/v1/tenants/$testTenantId/chief-of-staff/briefings?limit=10&offset=0") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, res1.status)
+        val json1 = Json.parseToJsonElement(res1.bodyAsText()).jsonObject
+        assertTrue(json1.containsKey("items"))
+        assertTrue(json1.containsKey("total"))
+        assertEquals(10, json1["limit"]?.jsonPrimitive?.int)
+        assertEquals(0, json1["offset"]?.jsonPrimitive?.int)
+
+        // Test alias route: /api/v1/tenants/{id}/briefings
+        val res2 = client.get("/api/v1/tenants/$testTenantId/briefings?limit=10&offset=0") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, res2.status)
+        val json2 = Json.parseToJsonElement(res2.bodyAsText()).jsonObject
+        assertTrue(json2.containsKey("items"))
+        assertTrue(json2.containsKey("total"))
+    }
+
+    @Test
+    fun testDataQualityIssuesPagination() = testApplication {
+        application {
+            module()
+        }
+
+        val testTenantId = "tenant-dqi-${UUID.randomUUID().toString().take(8)}"
+        val token = generateToken(testTenantId)
+
+        // Test canonical route: /api/v1/tenants/{id}/data-quality-issues
+        val res1 = client.get("/api/v1/tenants/$testTenantId/data-quality-issues?limit=10&offset=0") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, res1.status)
+        val json1 = Json.parseToJsonElement(res1.bodyAsText()).jsonObject
+        assertTrue(json1.containsKey("items"))
+        assertTrue(json1.containsKey("total"))
+        assertEquals(10, json1["limit"]?.jsonPrimitive?.int)
+        assertEquals(0, json1["offset"]?.jsonPrimitive?.int)
+
+        // Test alias route: /api/v1/tenants/{id}/data-quality/issues
+        val res2 = client.get("/api/v1/tenants/$testTenantId/data-quality/issues?limit=10&offset=0") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, res2.status)
+        val json2 = Json.parseToJsonElement(res2.bodyAsText()).jsonObject
+        assertTrue(json2.containsKey("items"))
+        assertTrue(json2.containsKey("total"))
+    }
+
+    @Test
+    fun testAttendanceHistoryPaginationWithOver25Items() = testApplication {
+        application {
+            module()
+        }
+
+        val testUserId = "user-att-${UUID.randomUUID().toString().take(8)}"
+        val testTenantId = "tenant-att-${UUID.randomUUID().toString().take(8)}"
+        val token = generateToken(testTenantId, userId = testUserId)
+
+        // Pre-populate 30 attendance records in AttendanceRecordStore
+        val list = ai.orchestree.backend.api.AttendanceRecordStore.inMemoryRecords.computeIfAbsent(testUserId) {
+            java.util.concurrent.CopyOnWriteArrayList()
+        }
+        val now = System.currentTimeMillis()
+        for (i in 1..30) {
+            list.add(
+                ai.orchestree.backend.api.AttendanceRecordItem(
+                    id = "att-$testUserId-$i",
+                    userId = testUserId,
+                    tenantId = testTenantId,
+                    timestamp = now - (30 - i) * 1000L,
+                    type = "CHECK_IN",
+                    locationName = "Site $i"
+                )
+            )
+        }
+
+        // Request Page 1
+        val response1 = client.get("/api/v1/attendance/history?userId=$testUserId&tenantId=$testTenantId&limit=10&offset=0") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, response1.status)
+        val body1 = Json.parseToJsonElement(response1.bodyAsText()).jsonObject
+        val total1 = body1["total"]?.jsonPrimitive?.long
+        val items1 = body1["items"]?.jsonArray
+
+        assertEquals(30L, total1)
+        assertNotNull(items1)
+        assertEquals(10, items1.size)
+
+        // Request Page 2
+        val response2 = client.get("/api/v1/attendance/history?userId=$testUserId&tenantId=$testTenantId&limit=10&offset=10") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, response2.status)
+        val body2 = Json.parseToJsonElement(response2.bodyAsText()).jsonObject
+        val items2 = body2["items"]?.jsonArray
+
+        assertNotNull(items2)
+        assertEquals(10, items2.size)
+
+        val page1Ids = items1.map { it.jsonObject["id"]?.jsonPrimitive?.content }.toSet()
+        val page2Ids = items2.map { it.jsonObject["id"]?.jsonPrimitive?.content }.toSet()
+        assertTrue(page1Ids.intersect(page2Ids).isEmpty(), "Page 1 and Page 2 must not have overlapping attendance records")
+    }
+
+    @Test
+    fun testBillingInvoicesPaginationWithOver25Items() = testApplication {
+        application {
+            module()
+        }
+
+        val testTenantId = "tenant-inv-${UUID.randomUUID().toString().take(8)}"
+        val token = generateToken(testTenantId)
+        val repoManager = ai.orchestree.backend.billing.CreditRepositoryManager()
+
+        // Pre-populate 30 invoices
+        val list = repoManager.inMemoryInvoices.computeIfAbsent(testTenantId) {
+            java.util.concurrent.CopyOnWriteArrayList<ai.orchestree.backend.billing.CommercialInvoiceRecord>()
+        }
+        val now = System.currentTimeMillis()
+        for (i in 1..30) {
+            val invId = "INV-$testTenantId-$i"
+            list.add(
+                ai.orchestree.backend.billing.CommercialInvoiceRecord(
+                    id = invId,
+                    tenantId = testTenantId,
+                    invoiceNumber = invId,
+                    planName = "Enterprise Plan",
+                    periodStart = now - 30L * 86400 * 1000,
+                    periodEnd = now,
+                    totalAmountIdr = 15000000.0,
+                    status = "PAID",
+                    paymentGateway = "midtrans",
+                    gatewayOrderId = invId,
+                    createdAt = now - (30 - i) * 1000L
+                )
+            )
+        }
+
+        // Test canonical route: /api/v1/billing/invoices
+        val response1 = client.get("/api/v1/billing/invoices?limit=10&offset=0") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, response1.status)
+        val body1 = Json.parseToJsonElement(response1.bodyAsText()).jsonObject
+        val total1 = body1["total"]?.jsonPrimitive?.long
+        val items1 = body1["items"]?.jsonArray
+
+        assertEquals(30L, total1)
+        assertNotNull(items1)
+        assertEquals(10, items1.size)
+
+        val response2 = client.get("/api/v1/billing/invoices?limit=10&offset=10") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, response2.status)
+        val body2 = Json.parseToJsonElement(response2.bodyAsText()).jsonObject
+        val items2 = body2["items"]?.jsonArray
+
+        assertNotNull(items2)
+        assertEquals(10, items2.size)
+
+        val page1Ids = items1.map { it.jsonObject["id"]?.jsonPrimitive?.content }.toSet()
+        val page2Ids = items2.map { it.jsonObject["id"]?.jsonPrimitive?.content }.toSet()
+        assertTrue(page1Ids.intersect(page2Ids).isEmpty(), "Page 1 and Page 2 must not have overlapping invoices")
+
+        // Test alias route: /api/v1/tenants/{id}/billing/invoices
+        val responseAlias = client.get("/api/v1/tenants/$testTenantId/billing/invoices?limit=10&offset=0") {
+            header(HttpHeaders.Authorization, "Bearer $token")
+        }
+        assertEquals(HttpStatusCode.OK, responseAlias.status)
+        val bodyAlias = Json.parseToJsonElement(responseAlias.bodyAsText()).jsonObject
+        assertEquals(30L, bodyAlias["total"]?.jsonPrimitive?.long)
     }
 }
 
