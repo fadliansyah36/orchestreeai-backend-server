@@ -158,7 +158,7 @@
 ### 6. `POST` /auth/profile
 - **Grep Confirmation**: Line 362 in `orchestreeai-backend-server/src/main/kotlin/ai/orchestree/backend/api/AuthRoutes.kt`
 - **Header Wajib**: `Content-Type: application/json`
-- **Request Body Schema**: `UserProfileDto`: `(val userId: String, val tenantId: String, val name: String, val email: String, val phone: String = "", val telegramChatId: String = "", val themePreference: String = "SYSTEM", val languagePreference: String = "id")`
+- **Request Body Schema**: `UserProfileDto`: `(val id: String, val tenantId: String, val email: String, val name: String, val role: UserRole, val capabilities: List<String>, val departmentName: String = "")`
 - **Response Body Schema**: `HttpStatusCode.OK, req`
 - **Status Engine Terhubung**: Tidak (Direct Service/Repo Call)
 - **Tabel Supabase Terpengaruh**: `users` (INSERT/SELECT/UPDATE)
