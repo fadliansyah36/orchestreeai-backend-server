@@ -327,32 +327,6 @@ fun Route.omnichannelSalesRoutes() {
                     } catch (_: Exception) {}
                 }
 
-                if (list.isEmpty()) {
-                    list.add(
-                        ChannelAccountItemResponse(
-                            id = "ca-wa-default",
-                            tenantId = tenantId,
-                            channelType = "WHATSAPP",
-                            accountLabel = "WhatsApp Business Official",
-                            externalIdentifier = "+628123456789",
-                            operationMode = "AI_AUTOPILOT",
-                            status = "ACTIVE",
-                            totalCreditUsed = 12.5
-                        )
-                    )
-                    list.add(
-                        ChannelAccountItemResponse(
-                            id = "ca-tg-default",
-                            tenantId = tenantId,
-                            channelType = "TELEGRAM",
-                            accountLabel = "Telegram Support Bot",
-                            externalIdentifier = "@OrchestreeSupportBot",
-                            operationMode = "AI_AUTOPILOT",
-                            status = "ACTIVE",
-                            totalCreditUsed = 8.0
-                        )
-                    )
-                }
                 list
             }
             call.respond(HttpStatusCode.OK, accounts)

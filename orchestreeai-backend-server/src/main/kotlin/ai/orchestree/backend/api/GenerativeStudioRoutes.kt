@@ -177,7 +177,26 @@ fun Route.generativeStudioRoutes(
         }
 
         get("/templates") {
-            call.respond(HttpStatusCode.OK, emptyList<String>())
+            val list = mutableListOf<String>()
+            val conn = ai.orchestree.backend.billing.DatabaseManager.getConnection()
+            if (conn != null) {
+                conn.use { c ->
+                    try {
+                        c.prepareStatement("SELECT code, name FROM creative_layout_templates WHERE is_active = true").use { ps ->
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    list.add(rs.getString("code") ?: rs.getString("name"))
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            if (list.isEmpty()) {
+                val cached = AdminDomainStores.masterData["creative_layout_templates"] ?: emptyList()
+                list.addAll(cached.map { it.key })
+            }
+            call.respond(HttpStatusCode.OK, list)
         }
 
         // 100% Deterministic Logo Upload (Fase 118 / Langkah 2.1)

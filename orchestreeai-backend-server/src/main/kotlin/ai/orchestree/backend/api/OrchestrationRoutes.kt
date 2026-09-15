@@ -82,7 +82,18 @@ fun Route.orchestrationRoutes() {
 
         get("/status/{executionId}") {
             val executionId = call.parameters["executionId"] ?: "unknown"
-            val result = executionHistory[executionId]
+            var result = executionHistory[executionId]
+            if (result == null) {
+                val dbExec = orchestrationEngine.workflowExecutionRepo.getById(executionId)
+                if (dbExec != null) {
+                    result = WorkflowExecutionResult(
+                        executionId = dbExec.id,
+                        workflowDefId = dbExec.workflowDefId,
+                        status = dbExec.executionStatus,
+                        finalOutput = dbExec.currentStateSnapshot ?: ""
+                    )
+                }
+            }
             if (result != null) {
                 call.respond(HttpStatusCode.OK, result)
             } else {
@@ -95,7 +106,18 @@ fun Route.orchestrationRoutes() {
 
         get("/executions/{executionId}") {
             val executionId = call.parameters["executionId"] ?: "unknown"
-            val result = executionHistory[executionId]
+            var result = executionHistory[executionId]
+            if (result == null) {
+                val dbExec = orchestrationEngine.workflowExecutionRepo.getById(executionId)
+                if (dbExec != null) {
+                    result = WorkflowExecutionResult(
+                        executionId = dbExec.id,
+                        workflowDefId = dbExec.workflowDefId,
+                        status = dbExec.executionStatus,
+                        finalOutput = dbExec.currentStateSnapshot ?: ""
+                    )
+                }
+            }
             if (result != null) {
                 call.respond(HttpStatusCode.OK, result)
             } else {
