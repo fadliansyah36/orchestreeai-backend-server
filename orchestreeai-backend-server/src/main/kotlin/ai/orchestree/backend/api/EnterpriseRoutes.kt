@@ -1,5 +1,6 @@
 package ai.orchestree.backend.api
 
+import ai.orchestree.backend.billing.DatabaseManager
 import ai.orchestree.backend.database.SupabaseClientProvider
 import ai.orchestree.backend.intelligence.CrossSystemCorrelator
 import ai.orchestree.backend.modelrouter.ModelRouteRequest
@@ -700,23 +701,46 @@ fun Route.enterpriseRoutes() {
         // AI Chief of Staff Briefings (PRD Addendum 2 Bagian 73, 78.1)
         get("/chief-of-staff/briefings") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val result = supabase.queryTable("chief_of_staff_briefings", tenantId)
-            if (result.isSuccess && result.getOrNull()?.isNotBlank() == true && result.getOrNull() != "[]") {
-                call.respondText(result.getOrDefault("[]"), io.ktor.http.ContentType.Application.Json, HttpStatusCode.OK)
-            } else {
+            val conn = DatabaseManager.getConnection()
+            val list = mutableListOf<ChiefOfStaffBriefingItem>()
+            if (conn != null) {
+                conn.use { c ->
+                    try {
+                        c.prepareStatement("""
+                            SELECT id, headline, executive_summary, strategic_recommendations, approval_status
+                            FROM chief_of_staff_briefings
+                            WHERE tenant_id = ? OR tenant_id = 'tenant-default'
+                            ORDER BY created_at DESC LIMIT 10
+                        """.trimIndent()).use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    list.add(
+                                        ChiefOfStaffBriefingItem(
+                                            briefingId = rs.getString("id"),
+                                            briefingType = "EXECUTIVE_SYNTHESIS",
+                                            executiveSummary = "${rs.getString("headline") ?: ""}: ${rs.getString("executive_summary") ?: ""} | ${rs.getString("strategic_recommendations") ?: ""}",
+                                            contributingAgents = listOf("CHIEF_OF_STAFF_AGENT", "WORKFORCE_ANALYTICS", "STRATEGIC_ADVISORY")
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            if (list.isEmpty()) {
                 val synthesized = chiefOfStaffService.generateExecutiveBriefing(tenantId)
-                call.respond(
-                    HttpStatusCode.OK,
-                    listOf(
-                        ChiefOfStaffBriefingItem(
-                            briefingId = synthesized.id,
-                            briefingType = "EXECUTIVE_SYNTHESIS",
-                            executiveSummary = "${synthesized.headline}: ${synthesized.executiveSummary} | ${synthesized.strategicRecommendations}",
-                            contributingAgents = listOf("CHIEF_OF_STAFF_AGENT", "WORKFORCE_ANALYTICS", "STRATEGIC_ADVISORY")
-                        )
+                list.add(
+                    ChiefOfStaffBriefingItem(
+                        briefingId = synthesized.id,
+                        briefingType = "EXECUTIVE_SYNTHESIS",
+                        executiveSummary = "${synthesized.headline}: ${synthesized.executiveSummary} | ${synthesized.strategicRecommendations}",
+                        contributingAgents = listOf("CHIEF_OF_STAFF_AGENT", "WORKFORCE_ANALYTICS", "STRATEGIC_ADVISORY")
                     )
                 )
             }
+            call.respond(HttpStatusCode.OK, list)
         }
 
         post("/chief-of-staff/synthesize") {

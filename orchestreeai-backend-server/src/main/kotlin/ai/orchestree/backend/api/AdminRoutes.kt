@@ -449,26 +449,40 @@ fun Route.adminRoutes(
         get("/tenants") {
             if (!call.enforceSuperAdmin()) return@get
             val tenantRepo = ai.orchestree.backend.database.repositories.identity.TenantRepository.instance
-            val activeTenantIds = tenantRepo.getActiveTenantIds().ifEmpty {
-                listOf("tenant-corp-001", "tenant-growth-002", "tenant-starter-003")
-            }
+            val activeTenantIds = tenantRepo.getActiveTenantIds()
             val tenantItems = mutableListOf<AdminTenantItem>()
+            val conn = DatabaseManager.getConnection()
 
             for (tid in activeTenantIds) {
                 val tier = try {
                     ai.orchestree.backend.enterprise.FeatureCapabilityService.getTenantTier(tid).name
                 } catch (_: Exception) { "STARTER" }
+                var usersCount = 0
+                var activeAgents = 0
+                if (conn != null) {
+                    try {
+                        conn.prepareStatement("SELECT count(*) FROM users WHERE tenant_id = ? AND deleted_at IS NULL").use { ps ->
+                            ps.setString(1, tid)
+                            ps.executeQuery().use { rs -> if (rs.next()) usersCount = rs.getInt(1) }
+                        }
+                        conn.prepareStatement("SELECT count(*) FROM ai_agents WHERE tenant_id = ? AND status = 'ACTIVE'").use { ps ->
+                            ps.setString(1, tid)
+                            ps.executeQuery().use { rs -> if (rs.next()) activeAgents = rs.getInt(1) }
+                        }
+                    } catch (_: Exception) {}
+                }
                 tenantItems.add(
                     AdminTenantItem(
                         id = tid,
                         name = if (tid.startsWith("tenant-")) tid.replace("tenant-", "").replace("-", " ").uppercase() else tid,
                         tier = tier,
                         status = "ACTIVE",
-                        usersCount = 12,
-                        activeAgents = 4
+                        usersCount = usersCount,
+                        activeAgents = activeAgents
                     )
                 )
             }
+            try { conn?.close() } catch (_: Exception) {}
 
             call.respond(HttpStatusCode.OK, tenantItems)
         }
@@ -1206,24 +1220,68 @@ fun Route.adminRoutes(
         // BAGIAN F: Department & AI Job Monitoring Lintas Tenant (Fase 91.A, H)
         // =================================================================
         get("/analytics/tenant-workforce-summary") {
+            var activeDepts = 0
+            var activeAgents = 0
+            var humanUsers = 0
+            val deptDist = mutableListOf<DepartmentCountItem>()
+            val roleDist = mutableListOf<AiJobTitleCountItem>()
+
+            val conn = DatabaseManager.getConnection()
+            if (conn != null) {
+                conn.use { c ->
+                    try {
+                        c.prepareStatement("SELECT count(*) FROM departments WHERE deleted_at IS NULL").use { ps ->
+                            ps.executeQuery().use { rs -> if (rs.next()) activeDepts = rs.getInt(1) }
+                        }
+                        c.prepareStatement("SELECT count(*) FROM ai_agents WHERE status = 'ACTIVE'").use { ps ->
+                            ps.executeQuery().use { rs -> if (rs.next()) activeAgents = rs.getInt(1) }
+                        }
+                        c.prepareStatement("SELECT count(*) FROM users WHERE deleted_at IS NULL").use { ps ->
+                            ps.executeQuery().use { rs -> if (rs.next()) humanUsers = rs.getInt(1) }
+                        }
+                        c.prepareStatement("""
+                            SELECT d.name, count(a.id) as cnt
+                            FROM departments d
+                            LEFT JOIN ai_agents a ON a.department_id = d.id
+                            WHERE d.deleted_at IS NULL
+                            GROUP BY d.name
+                            ORDER BY cnt DESC
+                            LIMIT 5
+                        """.trimIndent()).use { ps ->
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    val count = rs.getInt("cnt")
+                                    val pct = if (activeAgents > 0) Math.round((count.toDouble() / activeAgents * 100.0) * 10.0) / 10.0 else 0.0
+                                    deptDist.add(DepartmentCountItem(rs.getString("name"), count, pct))
+                                }
+                            }
+                        }
+                        c.prepareStatement("""
+                            SELECT coalesce(role_title, 'AI Specialist') as role, count(*) as cnt
+                            FROM ai_agents
+                            GROUP BY role
+                            ORDER BY cnt DESC
+                            LIMIT 5
+                        """.trimIndent()).use { ps ->
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    val count = rs.getInt("cnt")
+                                    val pct = if (activeAgents > 0) Math.round((count.toDouble() / activeAgents * 100.0) * 10.0) / 10.0 else 0.0
+                                    roleDist.add(AiJobTitleCountItem(rs.getString("role"), count, pct))
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+
+            val ratio = if (humanUsers > 0) "1 : ${Math.round((activeAgents.toDouble() / humanUsers.toDouble()) * 10.0) / 10.0}" else "0 : $activeAgents"
             val summary = AdminWorkforceMonitoringSummary(
-                totalActiveDepartments = 84,
-                totalAiAgents = 248,
-                humanToAiRatio = "1 : 3.2",
-                departmentDistribution = listOf(
-                    DepartmentCountItem("Sales & Business Development", 28, 33.3),
-                    DepartmentCountItem("Customer Service & Success", 22, 26.2),
-                    DepartmentCountItem("Operations & Production", 14, 16.7),
-                    DepartmentCountItem("Finance & Accounting", 11, 13.1),
-                    DepartmentCountItem("Marketing & Brand", 9, 10.7)
-                ),
-                aiJobTitleDistribution = listOf(
-                    AiJobTitleCountItem("AI Sales Consultant / SDR", 78, 31.5),
-                    AiJobTitleCountItem("AI Customer Care Agent", 64, 25.8),
-                    AiJobTitleCountItem("AI Chief of Staff", 42, 16.9),
-                    AiJobTitleCountItem("AI Operations & Machine Sentinel", 36, 14.5),
-                    AiJobTitleCountItem("AI Finance & Tax Assistant", 28, 11.3)
-                )
+                totalActiveDepartments = activeDepts,
+                totalAiAgents = activeAgents,
+                humanToAiRatio = ratio,
+                departmentDistribution = deptDist,
+                aiJobTitleDistribution = roleDist
             )
             call.respond(HttpStatusCode.OK, summary)
         }
@@ -1268,23 +1326,23 @@ fun Route.adminRoutes(
                     cpuUsagePercent = cpuUsage,
                     memoryUsageMb = usedMemMb.toLong(),
                     memoryMaxMb = maxMemMb.toLong(),
-                    activeConnections = 48
+                    activeConnections = 1
                 ),
                 jobQueueStatus = JobQueueStatusMetrics(
-                    activeJobs = 6,
+                    activeJobs = 0,
                     deadLetterCount = deadLetterCount,
-                    processedJobs24h = 18420,
-                    failureRatePercent = 0.04
+                    processedJobs24h = 0,
+                    failureRatePercent = 0.0
                 ),
                 securityIncidents = SecurityIncidentsMetrics(
                     suspiciousAuthAttempts24h = 0,
-                    abacViolations24h = 1,
-                    highRiskMcpExecutions24h = 14,
+                    abacViolations24h = 0,
+                    highRiskMcpExecutions24h = 0,
                     biometricAnomalies24h = 0
                 ),
                 rateLimitViolations = RateLimitViolationsMetrics(
-                    totalViolations24h = 2,
-                    topViolatingTenants = listOf("tenant-demo-sandbox"),
+                    totalViolations24h = 0,
+                    topViolatingTenants = emptyList(),
                     currentThrottleState = "NORMAL"
                 )
             )
@@ -1414,13 +1472,12 @@ fun Route.adminRoutes(
         get("/llm-usage") {
             val llmSummary = analyticsRepo.getLlmUsagePlatformWide()
             val providers = llmSummary.breakdown_by_provider.map { it.provider }
-            val activeProviders = if (providers.isNotEmpty()) providers else listOf("nvidia_nim", "openrouter", "groq")
             call.respond(
                 HttpStatusCode.OK,
                 LlmUsageSummaryResponse(
                     totalTokens = llmSummary.total_tokens.toInt(),
                     totalCostUsd = llmSummary.total_cost_usd,
-                    activeProviders = activeProviders
+                    activeProviders = providers
                 )
             )
         }
@@ -1583,52 +1640,21 @@ fun Route.adminRoutes(
                     adminLogger.warn("Failed querying ai_agents: ${e.message}")
                 }
             }
-            if (agents.isEmpty()) {
-                agents.addAll(
-                    listOf(
-                        AdminSpecialistAgentItem(
-                            id = "spec-01",
-                            name = "Orchestrator Pro",
-                            roleTitle = "Enterprise Orchestrator",
-                            sector = "GENERAL_ENTERPRISE",
-                            status = "ACTIVE",
-                            capabilities = listOf("Task Delegation", "Workflow Monitoring", "Anomaly Alerting")
-                        ),
-                        AdminSpecialistAgentItem(
-                            id = "spec-02",
-                            name = "Closer Elite",
-                            roleTitle = "Sales Specialist",
-                            sector = "SALES_COMMERCE",
-                            status = "ACTIVE",
-                            capabilities = listOf("Lead Nurturing", "Deal Negotiation", "Objection Handling")
-                        )
-                    )
-                )
-            }
             call.respond(HttpStatusCode.OK, agents)
         }
 
         // Studio Layout Templates (Rekomendasi 4)
         get("/studio/templates") {
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    AdminStudioTemplateItem(
-                        id = "tpl-01",
-                        templateCode = "MODERN_CORPORATE",
-                        templateName = "Modern Corporate Profile",
-                        category = "COMPANY_PROFILE",
-                        layoutStructure = "HERO_BANNER_TWO_COLUMN_GRID"
-                    ),
-                    AdminStudioTemplateItem(
-                        id = "tpl-02",
-                        templateCode = "MINIMALIST_TECH",
-                        templateName = "Minimalist Tech Overview",
-                        category = "COMPANY_PROFILE",
-                        layoutStructure = "CLEAN_TYPOGRAPHY_METRIC_CARDS"
-                    )
+            val templates = (AdminDomainStores.masterData["creative_layout_templates"] ?: emptyList()).map { item ->
+                AdminStudioTemplateItem(
+                    id = item.id,
+                    templateCode = item.key,
+                    templateName = item.value,
+                    category = item.category,
+                    layoutStructure = item.description ?: "DEFAULT_LAYOUT"
                 )
-            )
+            }
+            call.respond(HttpStatusCode.OK, templates)
         }
 
         // FASE 109 / LANGKAH 1: Dead-Letter Queue Management (PRD Master 1.1, 1.2)

@@ -45,14 +45,12 @@ open class TenantRepository(
             }
         }
 
-        // 2. Try direct JDBC connection if DATABASE_URL is configured
-        val dbUrl = EnvLoader.get("DATABASE_URL")
-        if (dbUrl.isNotBlank() && dbUrl != "placeholder") {
-            try {
-                val jdbcUrl = if (!dbUrl.startsWith("jdbc:")) "jdbc:$dbUrl" else dbUrl
-                Class.forName("org.postgresql.Driver")
-                DriverManager.getConnection(jdbcUrl).use { conn ->
-                    val stmt = conn.prepareStatement("SELECT id FROM tenants WHERE status = ?")
+        // 2. Try direct JDBC connection via DatabaseManager
+        val conn = ai.orchestree.backend.billing.DatabaseManager.getConnection()
+        if (conn != null) {
+            conn.use { c ->
+                try {
+                    val stmt = c.prepareStatement("SELECT id FROM tenants WHERE status = ?")
                     stmt.setString(1, "ACTIVE")
                     val rs = stmt.executeQuery()
                     val ids = mutableListOf<String>()
@@ -60,9 +58,9 @@ open class TenantRepository(
                         ids.add(rs.getString("id"))
                     }
                     if (ids.isNotEmpty()) return@withContext ids
+                } catch (e: Exception) {
+                    logger.warn("Failed to query tenants via JDBC: ${e.message}")
                 }
-            } catch (e: Exception) {
-                logger.warn("Failed to query tenants via JDBC: ${e.message}")
             }
         }
 

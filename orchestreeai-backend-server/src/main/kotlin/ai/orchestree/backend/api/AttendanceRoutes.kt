@@ -1,5 +1,6 @@
 package ai.orchestree.backend.api
 
+import ai.orchestree.backend.billing.DatabaseManager
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
@@ -68,21 +69,36 @@ fun Route.attendanceRoutes() {
             val req = call.receive<AttendanceCheckInRequest>()
             val tenantId = req.tenantId
 
-            // 1. Check Geofence
-            val defaultHq = listOf(
-                ai.orchestree.backend.attendance.WorkLocation(
-                    id = "loc-hq",
-                    tenantId = tenantId,
-                    name = req.locationName,
-                    latitude = -6.2088,
-                    longitude = 106.8456,
-                    radiusMeters = 200.0
-                )
-            )
+            // 1. Check Geofence from real work_locations
+            val locations = mutableListOf<ai.orchestree.backend.attendance.WorkLocation>()
+            val conn = DatabaseManager.getConnection()
+            if (conn != null) {
+                conn.use { c ->
+                    try {
+                        c.prepareStatement("SELECT id, name, latitude, longitude, radius_meters FROM work_locations WHERE tenant_id = ?").use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    locations.add(
+                                        ai.orchestree.backend.attendance.WorkLocation(
+                                            id = rs.getString("id"),
+                                            tenantId = tenantId,
+                                            name = rs.getString("name"),
+                                            latitude = rs.getDouble("latitude"),
+                                            longitude = rs.getDouble("longitude"),
+                                            radiusMeters = rs.getDouble("radius_meters")
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
             val geoResult = ai.orchestree.backend.attendance.GeofenceEngine.evaluateLocation(
                 deviceLat = req.latitude,
                 deviceLon = req.longitude,
-                locations = defaultHq
+                locations = locations
             )
 
             // 2. Inspect Anomalies
@@ -139,67 +155,109 @@ fun Route.attendanceRoutes() {
         get("/history") {
             val userId = call.request.queryParameters["userId"] ?: "user-default"
             val tenantId = call.request.queryParameters["tenantId"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    AttendanceRecordItem(
-                        id = "att-01",
-                        userId = userId,
-                        tenantId = tenantId,
-                        timestamp = System.currentTimeMillis() - 28800000L,
-                        type = "CHECK_IN",
-                        locationName = "Main Office Tower (Geofence Verified)",
-                        verificationStatus = "VERIFIED"
-                    ),
-                    AttendanceRecordItem(
-                        id = "att-02",
-                        userId = userId,
-                        tenantId = tenantId,
-                        timestamp = System.currentTimeMillis() - 3600000L,
-                        type = "CHECK_OUT",
-                        locationName = "Main Office Tower (Geofence Verified)",
-                        verificationStatus = "VERIFIED"
-                    )
-                )
-            )
+            val conn = DatabaseManager.getConnection()
+            val list = mutableListOf<AttendanceRecordItem>()
+            if (conn != null) {
+                conn.use { c ->
+                    try {
+                        c.prepareStatement(
+                            """
+                            SELECT id, user_id, tenant_id, created_at, status, check_in_time
+                            FROM attendance_records
+                            WHERE (user_id = ? OR ? = 'user-default') AND (tenant_id = ? OR tenant_id = 'tenant-default')
+                            ORDER BY created_at DESC LIMIT 50
+                            """.trimIndent()
+                        ).use { ps ->
+                            ps.setString(1, userId)
+                            ps.setString(2, userId)
+                            ps.setString(3, tenantId)
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    list.add(
+                                        AttendanceRecordItem(
+                                            id = rs.getString("id"),
+                                            userId = rs.getString("user_id") ?: userId,
+                                            tenantId = rs.getString("tenant_id") ?: tenantId,
+                                            timestamp = rs.getLong("check_in_time").takeIf { it > 0 } ?: rs.getLong("created_at"),
+                                            type = "CHECK_IN",
+                                            locationName = "Geofence Verified",
+                                            verificationStatus = rs.getString("status") ?: "VERIFIED"
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            call.respond(HttpStatusCode.OK, list)
         }
     }
 
     route("/tenants/{id}/geofences") {
         get {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    GeofenceItem(
-                        id = "geo-01",
-                        tenantId = tenantId,
-                        name = "Headquarters Jakarta",
-                        latitude = -6.2088,
-                        longitude = 106.8456,
-                        radiusMeters = 150.0,
-                        isActive = true
-                    ),
-                    GeofenceItem(
-                        id = "geo-02",
-                        tenantId = tenantId,
-                        name = "Surabaya Logistics Hub",
-                        latitude = -7.2575,
-                        longitude = 112.7521,
-                        radiusMeters = 200.0,
-                        isActive = true
-                    )
-                )
-            )
+            val conn = DatabaseManager.getConnection()
+            val list = mutableListOf<GeofenceItem>()
+            if (conn != null) {
+                conn.use { c ->
+                    try {
+                        c.prepareStatement(
+                            "SELECT id, tenant_id, name, latitude, longitude, radius_meters, is_active FROM work_locations WHERE tenant_id = ? OR tenant_id = 'tenant-default'"
+                        ).use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    list.add(
+                                        GeofenceItem(
+                                            id = rs.getString("id"),
+                                            tenantId = rs.getString("tenant_id") ?: tenantId,
+                                            name = rs.getString("name") ?: "",
+                                            latitude = rs.getDouble("latitude"),
+                                            longitude = rs.getDouble("longitude"),
+                                            radiusMeters = rs.getDouble("radius_meters"),
+                                            isActive = rs.getBoolean("is_active")
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            call.respond(HttpStatusCode.OK, list)
         }
 
         post {
             val tenantId = call.parameters["id"] ?: "tenant-default"
             val req = call.receive<GeofenceCreateRequest>()
+            val newId = "geo-${java.util.UUID.randomUUID().toString().take(8)}"
+            val conn = DatabaseManager.getConnection()
+            if (conn != null) {
+                conn.use { c ->
+                    try {
+                        c.prepareStatement(
+                            """
+                            INSERT INTO work_locations (id, tenant_id, name, latitude, longitude, radius_meters, is_active, created_at)
+                            VALUES (?, ?, ?, ?, ?, ?, true, ?)
+                            """.trimIndent()
+                        ).use { ps ->
+                            ps.setString(1, newId)
+                            ps.setString(2, tenantId)
+                            ps.setString(3, req.name)
+                            ps.setDouble(4, req.latitude)
+                            ps.setDouble(5, req.longitude)
+                            ps.setDouble(6, req.radiusMeters)
+                            ps.setLong(7, System.currentTimeMillis())
+                            ps.executeUpdate()
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
             call.respond(
                 HttpStatusCode.Created,
                 GeofenceItem(
-                    id = "geo-${java.util.UUID.randomUUID().toString().take(8)}",
+                    id = newId,
                     tenantId = tenantId,
                     name = req.name,
                     latitude = req.latitude,

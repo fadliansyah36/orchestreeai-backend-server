@@ -3,6 +3,7 @@ package ai.orchestree.backend.api
 import ai.orchestree.backend.database.SupabaseClientProvider
 import ai.orchestree.backend.database.repositories.identity.TenantRepository
 import ai.orchestree.backend.database.repositories.taskboard.TaskRepository
+import ai.orchestree.backend.database.repositories.workforce.TenantDomainRepository
 import ai.orchestree.backend.modelrouter.ModelRouter
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
@@ -310,17 +311,8 @@ fun Route.tenantRoutes() {
         // Overview dashboard tenant (PRD Master 15.1)
         get("/dashboard/overview") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                TenantDashboardOverviewResponse(
-                    tenantId = tenantId,
-                    activeAgents = 15,
-                    humanStaffCount = 42,
-                    activeTasks = 128,
-                    completionRate = 94.5,
-                    status = "HEALTHY"
-                )
-            )
+            val overview = TenantDomainRepository.getDashboardOverview(tenantId)
+            call.respond(HttpStatusCode.OK, overview)
         }
 
         // CRUD Departemen (PRD Master 15.1, 8.4)
@@ -471,14 +463,8 @@ fun Route.tenantRoutes() {
         get("/boards/{boardId}") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
             val boardId = call.parameters["boardId"] ?: "default"
-            call.respond(
-                HttpStatusCode.OK,
-                BoardKanbanResponse(
-                    boardId = boardId,
-                    tenantId = tenantId,
-                    columns = listOf("BACKLOG", "TODO", "IN_PROGRESS", "REVIEW", "DONE")
-                )
-            )
+            val board = TenantDomainRepository.getBoard(boardId, tenantId)
+            call.respond(HttpStatusCode.OK, board)
         }
     }
 
@@ -520,20 +506,8 @@ fun Route.tenantRoutes() {
         route("/proactive") {
             get("/subscriptions") {
                 val tenantId = call.parameters["id"] ?: "tenant-default"
-                call.respond(
-                    HttpStatusCode.OK,
-                    listOf(
-                        ProactiveSubscriptionItem(
-                            id = "sub-01",
-                            tenantId = tenantId,
-                            staffId = "staff-01",
-                            channel = "WHATSAPP",
-                            types = listOf("DAILY_BRIEF", "ANOMALY_ALERT"),
-                            sendTimes = listOf("08:00", "17:00"),
-                            status = "ACTIVE"
-                        )
-                    )
-                )
+                val subs = TenantDomainRepository.getProactiveSubscriptions(tenantId)
+                call.respond(HttpStatusCode.OK, subs)
             }
 
             get("/scope/{staffId}") {
@@ -546,12 +520,14 @@ fun Route.tenantRoutes() {
             }
 
             post("/subscriptions") {
+                val tenantId = call.parameters["id"] ?: "tenant-default"
                 val req = call.receive<ProactiveSubscriptionRequest>()
+                val created = TenantDomainRepository.createProactiveSubscription(tenantId, req)
                 val scopeRepo = ai.orchestree.backend.database.repositories.workforce.ProactiveCollaborationScopeRepository.defaultInstance
                 val scope = scopeRepo.determineProactiveScope(req.staffId)
                 call.respond(
                     HttpStatusCode.Created,
-                    GenericStatusResponse(status = "ACTIVE", id = req.staffId, message = "Subscribed with scope ${scope.scopeType}")
+                    GenericStatusResponse(status = "ACTIVE", id = created.id, message = "Subscribed with scope ${scope.scopeType}")
                 )
             }
         }
@@ -836,33 +812,46 @@ fun Route.tenantRoutes() {
                 }
             } else emptyList()
 
-            // 2. If no insights exist in DB yet, trigger live on-demand analysis via CompetitorIntelligenceEngine
+            // 2. If no insights exist in DB yet, check if target exists in competitor_targets table
             val finalInsights = if (insights.isEmpty()) {
-                val fallbackTarget = ai.orchestree.backend.competitor.CompetitorTarget(
-                    id = targetId,
+                val targetResult = supabase.queryTable(
+                    tableName = "competitor_targets",
                     tenantId = tenantId,
-                    name = "Target Competitor",
-                    url = "https://competitor.example.com"
+                    extraParams = mapOf("id" to "eq.$targetId")
                 )
-                try {
-                    val liveInsight = ai.orchestree.backend.competitor.CompetitorIntelligenceEngine.analyzeCompetitorTarget(
-                        target = fallbackTarget,
-                        modelRouter = modelRouter,
-                        supabase = supabase
-                    )
-                    listOf(
-                        CompetitorInsightItem(
-                            id = liveInsight.id,
-                            targetId = targetId,
-                            category = liveInsight.category,
-                            summary = liveInsight.summary,
-                            confidence = liveInsight.confidence,
-                            impactScore = liveInsight.impactScore
-                        )
-                    )
-                } catch (e: Exception) {
-                    emptyList()
-                }
+                if (targetResult.isSuccess) {
+                    try {
+                        val elems = kotlinx.serialization.json.Json.parseToJsonElement(targetResult.getOrDefault("[]"))
+                        if (elems is kotlinx.serialization.json.JsonArray && elems.isNotEmpty()) {
+                            val tObj = elems.first() as? kotlinx.serialization.json.JsonObject
+                            val tName = tObj?.get("name")?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: "Competitor"
+                            val tUrl = tObj?.get("url")?.let { if (it is kotlinx.serialization.json.JsonPrimitive) it.content else null } ?: ""
+                            val target = ai.orchestree.backend.competitor.CompetitorTarget(
+                                id = targetId,
+                                tenantId = tenantId,
+                                name = tName,
+                                url = tUrl
+                            )
+                            val liveInsight = ai.orchestree.backend.competitor.CompetitorIntelligenceEngine.analyzeCompetitorTarget(
+                                target = target,
+                                modelRouter = modelRouter,
+                                supabase = supabase
+                            )
+                            listOf(
+                                CompetitorInsightItem(
+                                    id = liveInsight.id,
+                                    targetId = targetId,
+                                    category = liveInsight.category,
+                                    summary = liveInsight.summary,
+                                    confidence = liveInsight.confidence,
+                                    impactScore = liveInsight.impactScore
+                                )
+                            )
+                        } else emptyList()
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                } else emptyList()
             } else {
                 insights
             }
@@ -873,25 +862,8 @@ fun Route.tenantRoutes() {
 
     route("/intel/world-trends") {
         get {
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    WorldTrendClusterItem(
-                        id = "trend-01",
-                        title = "Adopsi AI Agent Autonomous dalam Ritel Regional",
-                        summary = "Peningkatan 45% dalam adopsi otomasi CS berbasis LLM multimodal di Asia Tenggara kuartal ini.",
-                        category = "TECHNOLOGY",
-                        confidence = 0.94
-                    ),
-                    WorldTrendClusterItem(
-                        id = "trend-02",
-                        title = "Fluktuasi Pasokan Komponen & Tarif Logistik",
-                        summary = "Biaya freight forwarder mengalami penyesuaian 8% menyusul regulasi kepabeanan lintas batas baru.",
-                        category = "SUPPLY_CHAIN",
-                        confidence = 0.88
-                    )
-                )
-            )
+            val trends = TenantDomainRepository.getWorldTrends()
+            call.respond(HttpStatusCode.OK, trends)
         }
     }
 
@@ -910,21 +882,9 @@ fun Route.tenantRoutes() {
     // Proactive Subscriptions (PRD Master 15.1, 11.1)
     route("/proactive") {
         get("/subscriptions") {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    ProactiveSubscriptionItem(
-                        id = "sub-01",
-                        tenantId = tenantId,
-                        staffId = "staff-01",
-                        channel = "WHATSAPP",
-                        types = listOf("DAILY_BRIEF", "ANOMALY_ALERT"),
-                        sendTimes = listOf("08:00", "17:00"),
-                        status = "ACTIVE"
-                    )
-                )
-            )
+            val tenantId = call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val subs = TenantDomainRepository.getProactiveSubscriptions(tenantId)
+            call.respond(HttpStatusCode.OK, subs)
         }
 
         get("/scope/{staffId}") {
@@ -937,12 +897,14 @@ fun Route.tenantRoutes() {
         }
 
         post("/subscriptions") {
+            val tenantId = call.request.queryParameters["tenantId"] ?: "tenant-default"
             val req = call.receive<ProactiveSubscriptionRequest>()
+            val created = TenantDomainRepository.createProactiveSubscription(tenantId, req)
             val scopeRepo = ai.orchestree.backend.database.repositories.workforce.ProactiveCollaborationScopeRepository.defaultInstance
             val scope = scopeRepo.determineProactiveScope(req.staffId)
             call.respond(
                 HttpStatusCode.Created,
-                GenericStatusResponse(status = "ACTIVE", id = req.staffId, message = "Subscribed with scope ${scope.scopeType}")
+                GenericStatusResponse(status = "ACTIVE", id = created.id, message = "Subscribed with scope ${scope.scopeType}")
             )
         }
     }
@@ -951,225 +913,87 @@ fun Route.tenantRoutes() {
     route("/analytics") {
         get("/scores") {
             val period = call.request.queryParameters["period"] ?: "2026-08"
-            call.respond(
-                HttpStatusCode.OK,
-                AnalyticsScoreResponse(
-                    period = period,
-                    humanRanking = listOf(
-                        RankingEntry(name = "Budi Santoso", score = 92.4, rank = 1),
-                        RankingEntry(name = "Siti Rahma", score = 89.8, rank = 2)
-                    ),
-                    aiRanking = listOf(
-                        RankingEntry(name = "CLOSER", score = 96.1, rank = 1),
-                        RankingEntry(name = "SDR", score = 91.5, rank = 2)
-                    )
-                )
-            )
+            val response = TenantDomainRepository.getAnalyticsScores(period)
+            call.respond(HttpStatusCode.OK, response)
         }
     }
 
     // Performance Management (Rekomendasi 1)
     route("/performance") {
         get("/reports") {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    WorkReportDailyItem(
-                        id = "wr-01",
-                        tenantId = tenantId,
-                        staffId = "staff-01",
-                        staffName = "Budi Santoso",
-                        reportDate = "2026-09-04",
-                        accomplishments = "Menyelesaikan migrasi REST endpoint TenantRoutes dan integrasi BackendApiClient",
-                        blockers = "None",
-                        plannedNext = "Pengujian modul performa dan security"
-                    )
-                )
-            )
+            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val reports = TenantDomainRepository.getDailyReports(tenantId)
+            call.respond(HttpStatusCode.OK, reports)
         }
 
         post("/reports") {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
             val req = call.receive<CreateWorkReportRequest>()
-            call.respond(
-                HttpStatusCode.Created,
-                WorkReportDailyItem(
-                    id = "wr-${System.currentTimeMillis()}",
-                    tenantId = tenantId,
-                    staffId = req.staffId,
-                    staffName = req.staffName,
-                    reportDate = req.reportDate,
-                    accomplishments = req.accomplishments,
-                    blockers = req.blockers,
-                    plannedNext = req.plannedNext
-                )
-            )
+            val report = TenantDomainRepository.createDailyReport(tenantId, req)
+            call.respond(HttpStatusCode.Created, report)
         }
 
         get("/goals") {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    GoalKpiItem(
-                        id = "kpi-01",
-                        tenantId = tenantId,
-                        title = "Q3 Revenue Target",
-                        targetValue = 100000000.0,
-                        currentValue = 84500000.0,
-                        unit = "IDR",
-                        period = "Q3-2026",
-                        status = "ON_TRACK"
-                    ),
-                    GoalKpiItem(
-                        id = "kpi-02",
-                        tenantId = tenantId,
-                        title = "Customer Satisfaction Score",
-                        targetValue = 95.0,
-                        currentValue = 92.5,
-                        unit = "%",
-                        period = "Q3-2026",
-                        status = "ON_TRACK"
-                    )
-                )
-            )
+            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val goals = TenantDomainRepository.getGoals(tenantId)
+            call.respond(HttpStatusCode.OK, goals)
         }
 
         get("/reviews") {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    PerformanceReviewItem(
-                        id = "rev-01",
-                        tenantId = tenantId,
-                        staffId = "staff-01",
-                        reviewerId = "mgr-01",
-                        period = "Q2-2026",
-                        overallScore = 91.2,
-                        feedback = "Kinerja konsisten, kepemimpinan teknis sangat memuaskan.",
-                        status = "FINALIZED"
-                    )
-                )
-            )
+            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val reviews = TenantDomainRepository.getReviews(tenantId)
+            call.respond(HttpStatusCode.OK, reviews)
         }
 
         get("/predictions") {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    PerformanceRiskPredictionItem(
-                        id = "pred-01",
-                        tenantId = tenantId,
-                        staffId = "staff-02",
-                        staffName = "Siti Rahma",
-                        riskLevel = "LOW",
-                        riskScore = 12.5,
-                        primaryFactor = "Beban kerja seimbang",
-                        recommendation = "Pertahankan ritme kerja reguler"
-                    )
-                )
-            )
+            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val predictions = TenantDomainRepository.getPredictions(tenantId)
+            call.respond(HttpStatusCode.OK, predictions)
         }
 
         get("/executive-briefs") {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    ExecutiveBriefItem(
-                        id = "eb-01",
-                        tenantId = tenantId,
-                        title = "Monthly Executive Performance Brief",
-                        period = "August 2026",
-                        executiveSummary = "Pencapaian KPI enterprise stabil pada 92% target, efisiensi operasional agen meningkat 18%.",
-                        keyAchievements = listOf("Pencapaian penjualan produk utama 110%", "Adopsi AI workforce naik 40%"),
-                        riskAreas = listOf("Kapasitas server selama flash deal")
-                    )
-                )
-            )
+            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val briefs = TenantDomainRepository.getExecutiveBriefs(tenantId)
+            call.respond(HttpStatusCode.OK, briefs)
         }
     }
 
     // Security & Data Governance / GDPR (Rekomendasi 2)
     route("/security") {
         get("/anomalies") {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    SecurityAnomalyItem(
-                        id = "sec-01",
-                        tenantId = tenantId,
-                        anomalyType = "IP_LOCATION_CHANGE",
-                        severity = "MEDIUM",
-                        description = "Percobaan login dari lokasi baru terdeteksi dan memerlukan verifikasi",
-                        detectedAt = System.currentTimeMillis() - 7200000L
-                    )
-                )
-            )
+            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val anomalies = TenantDomainRepository.getSecurityAnomalies(tenantId)
+            call.respond(HttpStatusCode.OK, anomalies)
         }
 
         get("/dsr") {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    DataSubjectRequestItem(
-                        id = "dsr-01",
-                        tenantId = tenantId,
-                        requestType = "RIGHT_TO_ERASURE",
-                        requesterEmail = "user@external.com",
-                        status = "PENDING"
-                    )
-                )
-            )
+            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val requests = TenantDomainRepository.getDataSubjectRequests(tenantId)
+            call.respond(HttpStatusCode.OK, requests)
         }
 
         post("/dsr") {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
+            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
             val req = call.receive<CreateDataSubjectRequest>()
-            call.respond(
-                HttpStatusCode.Created,
-                DataSubjectRequestItem(
-                    id = "dsr-${System.currentTimeMillis()}",
-                    tenantId = tenantId,
-                    requestType = req.requestType,
-                    requesterEmail = req.requesterEmail,
-                    status = "PENDING"
-                )
-            )
+            val created = TenantDomainRepository.createDataSubjectRequest(tenantId, req)
+            call.respond(HttpStatusCode.Created, created)
         }
     }
 
     // Attendance Anomalies (Rekomendasi 3)
     route("/attendance/anomalies") {
         get {
-            val tenantId = call.parameters["id"] ?: "tenant-default"
-            call.respond(
-                HttpStatusCode.OK,
-                listOf(
-                    AttendanceAnomalyItem(
-                        id = "anom-01",
-                        tenantId = tenantId,
-                        staffId = "staff-01",
-                        staffName = "Budi Santoso",
-                        anomalyType = "OUT_OF_GEOFENCE",
-                        timestamp = System.currentTimeMillis() - 86400000L,
-                        status = "RESOLVED",
-                        resolutionNotes = "Tugas luar kota telah dikonfirmasi oleh Manager"
-                    )
-                )
-            )
+            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val anomalies = TenantDomainRepository.getAttendanceAnomalies(tenantId)
+            call.respond(HttpStatusCode.OK, anomalies)
         }
 
         post("/{anomalyId}/resolve") {
             val anomalyId = call.parameters["anomalyId"] ?: ""
+            val resolved = TenantDomainRepository.resolveAttendanceAnomaly(anomalyId)
             call.respond(
                 HttpStatusCode.OK,
-                GenericStatusResponse(status = "RESOLVED", id = anomalyId, message = "Anomaly resolved successfully")
+                GenericStatusResponse(status = if (resolved) "RESOLVED" else "NOT_FOUND", id = anomalyId, message = if (resolved) "Anomaly resolved successfully in database" else "Anomaly not found or already resolved")
             )
         }
     }

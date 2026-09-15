@@ -1052,15 +1052,44 @@ fun Route.omnichannelSalesRoutes() {
         }
 
         get("/analytics/sales-coach") {
+            val tenantId = call.parameters["id"] ?: "tenant-default"
+            var leadCount = 0
+            var orderCount = 0
+            val conn = DatabaseManager.getConnection()
+            if (conn != null) {
+                conn.use { c ->
+                    try {
+                        c.prepareStatement("SELECT count(*) FROM leads WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.executeQuery().use { rs -> if (rs.next()) leadCount = rs.getInt(1) }
+                        }
+                        c.prepareStatement("SELECT count(*) FROM orders WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.executeQuery().use { rs -> if (rs.next()) orderCount = rs.getInt(1) }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            val conversion = if (leadCount > 0) Math.round((orderCount.toDouble() / leadCount.toDouble() * 100.0) * 10.0) / 10.0 else 0.0
+            val insight = if (orderCount > 0) {
+                "Tingkat konversi tim berada pada $conversion% dengan total $orderCount transaksi berhasil dari $leadCount prospek."
+            } else {
+                "Belum ada data transaksi atau interaksi penjualan tersimpan untuk periode ini."
+            }
+            val recommendations = if (orderCount > 0) {
+                listOf(
+                    "Optimalkan tindak lanjut otomatis untuk prospek baru",
+                    "Gunakan persona Closer untuk keberatan harga dengan skrip ROI reframing"
+                )
+            } else {
+                emptyList()
+            }
             call.respond(
                 HttpStatusCode.OK,
                 SalesCoachResponse(
-                    overallTeamConversion = 26.8,
-                    topInsight = "Melakukan konsultasi empati mendalam (Sales Consultant persona) sebelum menawarkan harga meningkatkan konversi sebesar 38%.",
-                    recommendations = listOf(
-                        "Gunakan persona Closer untuk keberatan harga dengan skrip ROI reframing",
-                        "Jalankan auto-recovery untuk keranjang belanja ditinggalkan dalam 2 jam"
-                    )
+                    overallTeamConversion = conversion,
+                    topInsight = insight,
+                    recommendations = recommendations
                 )
             )
         }
