@@ -17,6 +17,8 @@ import ai.orchestree.backend.intelligence.UnmatchedCalibrationCriterionException
 import ai.orchestree.backend.database.repositories.selection.SelectionCalibrationSettingRecord
 import ai.orchestree.backend.database.repositories.selection.SelectionCalibrationItemRecord
 import ai.orchestree.backend.modelrouter.ModelRouter
+import ai.orchestree.backend.util.PagedResponse
+import ai.orchestree.backend.util.PaginationDefaults
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -438,13 +440,15 @@ fun Route.selectionRoutes() {
         }
 
         /**
-         * GET /api/v1/selection/requests — List all selection requests for tenant
+         * GET /api/v1/selection/requests — List all selection requests for tenant (Paginated)
          */
         get("/requests") {
             val tenantId = call.requireTenantId() ?: return@get
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
 
-            val list = selectionRepo.listSelectionRequests(tenantId)
-            call.respond(HttpStatusCode.OK, list)
+            val (total, list) = selectionRepo.listSelectionRequestsPaginated(tenantId, limit, offset)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = list, total = total, limit = limit, offset = offset))
         }
 
         /**
@@ -474,25 +478,29 @@ fun Route.selectionRoutes() {
         }
 
         /**
-         * GET /api/v1/selection/{id}/results — Ambil spesifik hasil evaluasi dan ranking
+         * GET /api/v1/selection/{id}/results — Ambil spesifik hasil evaluasi dan ranking (Paginated)
          */
         get("/{id}/results") {
             val tenantId = call.requireTenantId() ?: return@get
             val reqId = call.parameters["id"] ?: ""
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
 
-            val results = selectionRepo.getSelectionResults(reqId, tenantId)
-            call.respond(HttpStatusCode.OK, results)
+            val (total, results) = selectionRepo.getSelectionResultsPaginated(reqId, tenantId, limit, offset)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = results, total = total, limit = limit, offset = offset))
         }
 
         /**
-         * GET /api/v1/selection/{id}/analytics — Ambil ringkasan analitik dan distribusi
+         * GET /api/v1/selection/{id}/analytics — Ambil ringkasan analitik dan distribusi (Paginated)
          */
         get("/{id}/analytics") {
             val tenantId = call.requireTenantId() ?: return@get
             val reqId = call.parameters["id"] ?: ""
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
 
-            val analytics = selectionRepo.getSelectionAnalytics(reqId, tenantId)
-            call.respond(HttpStatusCode.OK, analytics)
+            val (total, analytics) = selectionRepo.getSelectionAnalyticsPaginated(reqId, tenantId, limit, offset)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = analytics, total = total, limit = limit, offset = offset))
         }
 
         /**

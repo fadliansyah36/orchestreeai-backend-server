@@ -5,6 +5,8 @@ import ai.orchestree.backend.database.SupabaseClientProvider
 import ai.orchestree.backend.intelligence.CrossSystemCorrelator
 import ai.orchestree.backend.modelrouter.ModelRouteRequest
 import ai.orchestree.backend.modelrouter.ModelRouter
+import ai.orchestree.backend.util.PagedResponse
+import ai.orchestree.backend.util.PaginationDefaults
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
@@ -355,11 +357,15 @@ fun Route.enterpriseRoutes() {
         // Company Activity Stream & Cross-System Intelligence (PRD Addendum 2 Bagian 62, 78.1)
         get("/activity-stream") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val streamItems = ai.orchestree.backend.enterprise.CompanyActivityStreamService.getStream(
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            val (total, streamItems) = ai.orchestree.backend.enterprise.CompanyActivityStreamService.getStreamPaginated(
                 tenantId = tenantId,
+                limit = limit,
+                offset = offset,
                 auditLogger = auditLogger
             )
-            call.respond(HttpStatusCode.OK, streamItems)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = streamItems, total = total, limit = limit, offset = offset))
         }
 
         // Company Context Fabric 8 Dimensions (PRD Addendum 2 Bagian 63, 78.1)
@@ -589,8 +595,10 @@ fun Route.enterpriseRoutes() {
         // AI Event Engine (PRD Addendum 2 Bagian 71, 78.1)
         get("/events") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val events = aiEventEngine.listEvents(tenantId)
-            call.respond(HttpStatusCode.OK, events)
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            val (total, events) = aiEventEngine.listEventsPaginated(tenantId, limit, offset)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = events, total = total, limit = limit, offset = offset))
         }
 
         post("/events") {
@@ -619,8 +627,12 @@ fun Route.enterpriseRoutes() {
         // AI Action Orchestration & Execution Layer (PRD Addendum 2 Bagian 67)
         get("/actions") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val actions = aiActionOrchestrator.actionsStore.values.filter { it.tenantId == tenantId || it.tenantId == "tenant-default" }
-            call.respond(HttpStatusCode.OK, actions)
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            val allActions = aiActionOrchestrator.actionsStore.values.filter { it.tenantId == tenantId || it.tenantId == "tenant-default" }
+            val total = allActions.size.toLong()
+            val paged = allActions.drop(offset).take(limit)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = paged, total = total, limit = limit, offset = offset))
         }
 
         post("/actions/propose") {
@@ -701,18 +713,31 @@ fun Route.enterpriseRoutes() {
         // AI Chief of Staff Briefings (PRD Addendum 2 Bagian 73, 78.1)
         get("/chief-of-staff/briefings") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
             val conn = DatabaseManager.getConnection()
             val list = mutableListOf<ChiefOfStaffBriefingItem>()
+            var count = 0L
+
             if (conn != null) {
                 conn.use { c ->
                     try {
+                        c.prepareStatement("SELECT count(*) FROM chief_of_staff_briefings WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.executeQuery().use { rs ->
+                                if (rs.next()) count = rs.getLong(1)
+                            }
+                        }
+
                         c.prepareStatement("""
                             SELECT id, headline, executive_summary, strategic_recommendations, approval_status
                             FROM chief_of_staff_briefings
                             WHERE tenant_id = ? OR tenant_id = 'tenant-default'
-                            ORDER BY created_at DESC LIMIT 10
+                            ORDER BY created_at DESC LIMIT ? OFFSET ?
                         """.trimIndent()).use { ps ->
                             ps.setString(1, tenantId)
+                            ps.setInt(2, limit)
+                            ps.setInt(3, offset)
                             ps.executeQuery().use { rs ->
                                 while (rs.next()) {
                                     list.add(
@@ -729,7 +754,7 @@ fun Route.enterpriseRoutes() {
                     } catch (_: Exception) {}
                 }
             }
-            if (list.isEmpty()) {
+            if (count == 0L && list.isEmpty() && offset == 0) {
                 val synthesized = chiefOfStaffService.generateExecutiveBriefing(tenantId)
                 list.add(
                     ChiefOfStaffBriefingItem(
@@ -739,8 +764,9 @@ fun Route.enterpriseRoutes() {
                         contributingAgents = listOf("CHIEF_OF_STAFF_AGENT", "WORKFORCE_ANALYTICS", "STRATEGIC_ADVISORY")
                     )
                 )
+                count = 1L
             }
-            call.respond(HttpStatusCode.OK, list)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = list, total = count, limit = limit, offset = offset))
         }
 
         post("/chief-of-staff/synthesize") {
@@ -816,20 +842,37 @@ fun Route.enterpriseRoutes() {
         // Data Quality & Conflict Detection (PRD Addendum 2 Bagian 76, 78.1)
         get("/data-quality-issues") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
             val issues = mutableListOf<DataQualityIssueItem>()
-            
+            var count = 0L
+
             try {
                 ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
+                    conn.prepareStatement("""
+                        SELECT count(*)
+                        FROM company_activity_stream e1
+                        JOIN company_activity_stream e2 ON e1.entity_reference = e2.entity_reference AND e1.system_type <> e2.system_type
+                        WHERE (e1.tenant_id = ? OR e1.tenant_id = 'tenant-default')
+                    """.trimIndent()).use { ps ->
+                        ps.setString(1, tenantId)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next()) count = rs.getLong(1)
+                        }
+                    }
+
                     conn.prepareStatement("""
                         SELECT e1.entity_reference, e1.system_type as sys_a, e2.system_type as sys_b, e1.summary as summary_a, e2.summary as summary_b
                         FROM company_activity_stream e1
                         JOIN company_activity_stream e2 ON e1.entity_reference = e2.entity_reference AND e1.system_type <> e2.system_type
                         WHERE (e1.tenant_id = ? OR e1.tenant_id = 'tenant-default')
-                        LIMIT 5
+                        LIMIT ? OFFSET ?
                     """.trimIndent()).use { ps ->
                         ps.setString(1, tenantId)
+                        ps.setInt(2, limit)
+                        ps.setInt(3, offset)
                         ps.executeQuery().use { rs ->
-                            var idx = 1
+                            var idx = offset + 1
                             while (rs.next()) {
                                 issues.add(
                                     DataQualityIssueItem(
@@ -848,7 +891,7 @@ fun Route.enterpriseRoutes() {
                 }
             } catch (_: Exception) {}
 
-            if (issues.isEmpty()) {
+            if (count == 0L && issues.isEmpty() && offset == 0) {
                 issues.add(
                     DataQualityIssueItem(
                         issueId = "dqi-01",
@@ -859,8 +902,9 @@ fun Route.enterpriseRoutes() {
                         status = "OPEN"
                     )
                 )
+                count = 1L
             }
-            call.respond(HttpStatusCode.OK, issues)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = issues, total = count, limit = limit, offset = offset))
         }
 
         // PRD Bagian 78.1: Fase 2B.4 Endpoints

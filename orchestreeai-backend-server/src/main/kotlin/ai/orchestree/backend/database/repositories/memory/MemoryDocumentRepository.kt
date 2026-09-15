@@ -243,53 +243,82 @@ class MemoryDocumentRepository(
         null
     }
 
-    suspend fun listByTenant(tenantId: String, includeArchived: Boolean = false): List<MemoryDocumentRecord> = withContext(Dispatchers.IO) {
+    suspend fun listByTenant(tenantId: String, includeArchived: Boolean = false): List<MemoryDocumentRecord> =
+        listByTenantPaginated(tenantId, includeArchived, 100, 0).second
+
+    suspend fun listByTenantPaginated(
+        tenantId: String,
+        includeArchived: Boolean = false,
+        limit: Int = 20,
+        offset: Int = 0
+    ): Pair<Long, List<MemoryDocumentRecord>> = withContext(Dispatchers.IO) {
         val results = mutableListOf<MemoryDocumentRecord>()
+        var count = 0L
         try {
             ai.orchestree.backend.billing.DatabaseManager.getConnection()?.use { conn ->
-                val sql = if (includeArchived) {
-                    "SELECT id, tenant_id, source_type, title, content, tags, source_reference, relevance_weight, is_archived, importance_score, novelty_score, specificity_score FROM memory_documents WHERE tenant_id = ? OR tenant_id = 'tenant-default' ORDER BY id"
+                val countSql = if (includeArchived) {
+                    "SELECT count(*) FROM memory_documents WHERE tenant_id = ? OR tenant_id = 'tenant-default'"
                 } else {
-                    "SELECT id, tenant_id, source_type, title, content, tags, source_reference, relevance_weight, is_archived, importance_score, novelty_score, specificity_score FROM memory_documents WHERE (tenant_id = ? OR tenant_id = 'tenant-default') AND is_archived = false ORDER BY id"
+                    "SELECT count(*) FROM memory_documents WHERE (tenant_id = ? OR tenant_id = 'tenant-default') AND is_archived = false"
                 }
-                conn.prepareStatement(sql).use { ps ->
+                conn.prepareStatement(countSql).use { ps ->
                     ps.setString(1, tenantId)
-                    val rs = ps.executeQuery()
-                    while (rs.next()) {
-                        results.add(
-                            MemoryDocumentRecord(
-                                id = rs.getString("id"),
-                                tenantId = rs.getString("tenant_id"),
-                                sourceType = rs.getString("source_type") ?: "episodic",
-                                title = rs.getString("title") ?: "",
-                                content = rs.getString("content") ?: "",
-                                tags = rs.getString("tags") ?: "",
-                                sourceReference = rs.getString("source_reference") ?: "",
-                                relevanceWeight = rs.getDouble("relevance_weight"),
-                                isArchived = rs.getBoolean("is_archived"),
-                                importanceScore = rs.getDouble("importance_score"),
-                                noveltyScore = rs.getDouble("novelty_score"),
-                                specificityScore = rs.getDouble("specificity_score")
-                            )
-                        )
+                    ps.executeQuery().use { rs ->
+                        if (rs.next()) count = rs.getLong(1)
                     }
+                }
+
+                if (count > 0L) {
+                    val sql = if (includeArchived) {
+                        "SELECT id, tenant_id, source_type, title, content, tags, source_reference, relevance_weight, is_archived, importance_score, novelty_score, specificity_score FROM memory_documents WHERE tenant_id = ? OR tenant_id = 'tenant-default' ORDER BY id LIMIT ? OFFSET ?"
+                    } else {
+                        "SELECT id, tenant_id, source_type, title, content, tags, source_reference, relevance_weight, is_archived, importance_score, novelty_score, specificity_score FROM memory_documents WHERE (tenant_id = ? OR tenant_id = 'tenant-default') AND is_archived = false ORDER BY id LIMIT ? OFFSET ?"
+                    }
+                    conn.prepareStatement(sql).use { ps ->
+                        ps.setString(1, tenantId)
+                        ps.setInt(2, limit)
+                        ps.setInt(3, offset)
+                        val rs = ps.executeQuery()
+                        while (rs.next()) {
+                            results.add(
+                                MemoryDocumentRecord(
+                                    id = rs.getString("id"),
+                                    tenantId = rs.getString("tenant_id"),
+                                    sourceType = rs.getString("source_type") ?: "episodic",
+                                    title = rs.getString("title") ?: "",
+                                    content = rs.getString("content") ?: "",
+                                    tags = rs.getString("tags") ?: "",
+                                    sourceReference = rs.getString("source_reference") ?: "",
+                                    relevanceWeight = rs.getDouble("relevance_weight"),
+                                    isArchived = rs.getBoolean("is_archived"),
+                                    importanceScore = rs.getDouble("importance_score"),
+                                    noveltyScore = rs.getDouble("novelty_score"),
+                                    specificityScore = rs.getDouble("specificity_score")
+                                )
+                            )
+                        }
+                    }
+                    return@withContext Pair(count, results)
                 }
             }
         } catch (e: Exception) {
             logger.warn("Query DB memory_documents notice: ${e.message}")
         }
 
-        if (results.isNotEmpty()) {
-            return@withContext results
-        }
-
         val inMem = inMemoryStore[tenantId]?.toList() ?: emptyList()
         val filteredInMem = if (includeArchived) inMem else inMem.filter { !it.isArchived }
-        if (filteredInMem.isNotEmpty()) return@withContext filteredInMem
+        if (filteredInMem.isNotEmpty()) {
+            val total = filteredInMem.size.toLong()
+            val paged = filteredInMem.drop(offset).take(limit)
+            return@withContext Pair(total, paged)
+        }
 
         seedSampleDataIfEmpty(tenantId)
         val refreshed = inMemoryStore[tenantId]?.toList() ?: emptyList()
-        if (includeArchived) refreshed else refreshed.filter { !it.isArchived }
+        val finalInMem = if (includeArchived) refreshed else refreshed.filter { !it.isArchived }
+        val total = finalInMem.size.toLong()
+        val paged = finalInMem.drop(offset).take(limit)
+        Pair(total, paged)
     }
 
     fun clear() {

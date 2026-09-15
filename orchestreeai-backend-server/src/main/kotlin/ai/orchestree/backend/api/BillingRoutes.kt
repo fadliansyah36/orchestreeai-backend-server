@@ -5,6 +5,8 @@ import ai.orchestree.backend.database.repositories.workforce.AgentModel
 import ai.orchestree.backend.database.repositories.workforce.User
 import ai.orchestree.backend.database.repositories.workforce.AgentRepository
 import ai.orchestree.backend.database.repositories.workforce.UserRepository
+import ai.orchestree.backend.util.PagedResponse
+import ai.orchestree.backend.util.PaginationDefaults
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
@@ -533,9 +535,11 @@ fun Route.billingRoutes(
         route("/invoices") {
             get {
                 val tenantId = call.enforceAuthAndGetTenant() ?: return@get
+                val limit = PaginationDefaults.parseLimit(call)
+                val offset = PaginationDefaults.parseOffset(call)
                 try {
-                    val invoices = repoManager.getInvoices(tenantId)
-                    call.respond(HttpStatusCode.OK, invoices)
+                    val (total, invoices) = repoManager.getInvoicesPaginated(tenantId, limit, offset)
+                    call.respond(HttpStatusCode.OK, PagedResponse(items = invoices, total = total, limit = limit, offset = offset))
                 } catch (e: Exception) {
                     logger.error("Failed to get invoices for $tenantId: ${e.message}", e)
                     call.respond(HttpStatusCode.InternalServerError, mapOf("error" to (e.message ?: "Failed to get invoices")))

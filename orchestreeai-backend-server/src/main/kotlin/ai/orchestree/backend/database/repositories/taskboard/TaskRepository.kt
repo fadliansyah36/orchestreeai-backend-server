@@ -562,6 +562,18 @@ class TaskRepository(
         }
     }
 
+    suspend fun getTasksForUserPaginated(
+        userId: String,
+        boardId: String = "default",
+        limit: Int = 20,
+        offset: Int = 0
+    ): Pair<Long, List<Task>> {
+        val all = getTasksForUser(userId, boardId)
+        val total = all.size.toLong()
+        val paginated = all.drop(offset).take(limit)
+        return Pair(total, paginated)
+    }
+
     suspend fun getTasks(tenantId: String): Result<String> {
         if (supabase.isConfigured()) {
             val res = supabase.queryTable("tasks", tenantId)
@@ -796,6 +808,62 @@ class TaskRepository(
 
     suspend fun createActivityLog(item: TaskActivityLogItem): TaskActivityLogItem = recordActivityLog(item)
     suspend fun getActivityLogsForTask(taskId: String): List<TaskActivityLogItem> = getActivityLogs(taskId)
+
+    suspend fun getActivityLogsForTaskPaginated(
+        taskId: String,
+        limit: Int = 20,
+        offset: Int = 0
+    ): Pair<Long, List<TaskActivityLogItem>> {
+        val conn = ai.orchestree.backend.billing.DatabaseManager.getConnection()
+        if (conn != null) {
+            try {
+                return conn.use { c ->
+                    var total = 0L
+                    c.prepareStatement("SELECT count(*) FROM task_activity_log WHERE task_id = ?").use { ps ->
+                        ps.setString(1, taskId)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next()) total = rs.getLong(1)
+                        }
+                    }
+
+                    val list = mutableListOf<TaskActivityLogItem>()
+                    c.prepareStatement("SELECT id, task_id, tenant_id, actor_id, actor_type, action, detail, created_at FROM task_activity_log WHERE task_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?").use { ps ->
+                        ps.setString(1, taskId)
+                        ps.setInt(2, limit)
+                        ps.setInt(3, offset)
+                        ps.executeQuery().use { rs ->
+                            while (rs.next()) {
+                                val ts = rs.getTimestamp("created_at")?.time ?: System.currentTimeMillis()
+                                list.add(
+                                    TaskActivityLogItem(
+                                        id = rs.getString("id") ?: java.util.UUID.randomUUID().toString(),
+                                        taskId = rs.getString("task_id") ?: taskId,
+                                        tenantId = rs.getString("tenant_id") ?: "tenant-default",
+                                        actorId = rs.getString("actor_id"),
+                                        actorType = rs.getString("actor_type") ?: "ai_agent",
+                                        action = rs.getString("action") ?: "",
+                                        detail = rs.getString("detail") ?: "",
+                                        createdAt = ts
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+                    if (total > 0 || list.isNotEmpty()) {
+                        Pair(total, list)
+                    } else {
+                        val fallback = activityLogsStore[taskId] ?: emptyList()
+                        Pair(fallback.size.toLong(), fallback.drop(offset).take(limit))
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Failed to query task_activity_log SQL paginated: ${e.message}")
+            }
+        }
+        val fallback = activityLogsStore[taskId] ?: emptyList()
+        return Pair(fallback.size.toLong(), fallback.drop(offset).take(limit))
+    }
 
     suspend fun updateTaskDescription(taskId: String, descriptionRichText: String): Result<Task> {
         val existing = tasksStore[taskId] ?: return Result.failure(Exception("Task $taskId not found"))

@@ -767,34 +767,58 @@ class CreditRepositoryManager(
         }
     }
 
-    suspend fun getInvoices(tenantId: String): List<CommercialInvoiceRecord> = withContext(Dispatchers.IO) {
+    suspend fun getInvoices(tenantId: String): List<CommercialInvoiceRecord> =
+        getInvoicesPaginated(tenantId, 100, 0).second
+
+    suspend fun getInvoicesPaginated(
+        tenantId: String,
+        limit: Int = 20,
+        offset: Int = 0
+    ): Pair<Long, List<CommercialInvoiceRecord>> = withContext(Dispatchers.IO) {
         val conn = dbManager.getConnection() ?: error("Database connection required")
         conn.use { c ->
-            c.prepareStatement("SELECT id, tenant_id, invoice_number, plan_name, period_start, period_end, total_amount_idr, status, payment_gateway, gateway_order_id, created_at FROM invoices WHERE tenant_id = ? ORDER BY created_at DESC").use { ps ->
+            var count = 0L
+            c.prepareStatement("SELECT count(*) FROM invoices WHERE tenant_id = ?").use { ps ->
                 ps.setString(1, tenantId)
-                val rs = ps.executeQuery()
-                val list = mutableListOf<CommercialInvoiceRecord>()
-                while (rs.next()) {
-                    list.add(
-                        CommercialInvoiceRecord(
-                            id = rs.getString("id"),
-                            tenantId = rs.getString("tenant_id"),
-                            invoiceNumber = rs.getString("invoice_number"),
-                            planName = rs.getString("plan_name"),
-                            periodStart = rs.getTimestamp("period_start")?.time,
-                            periodEnd = rs.getTimestamp("period_end")?.time,
-                            totalAmountIdr = rs.getDouble("total_amount_idr"),
-                            status = rs.getString("status"),
-                            paymentGateway = rs.getString("payment_gateway"),
-                            gatewayOrderId = rs.getString("gateway_order_id"),
-                            paymentUrl = "https://app.sandbox.midtrans.com/snap/v2/vtweb/${rs.getString("gateway_order_id")}",
-                            snapToken = rs.getString("gateway_order_id"),
-                            createdAt = rs.getTimestamp("created_at")?.time
-                        )
-                    )
+                ps.executeQuery().use { rs ->
+                    if (rs.next()) count = rs.getLong(1)
                 }
-                list
             }
+            val list = mutableListOf<CommercialInvoiceRecord>()
+            if (count > 0L) {
+                c.prepareStatement("""
+                    SELECT id, tenant_id, invoice_number, plan_name, period_start, period_end, total_amount_idr, status, payment_gateway, gateway_order_id, created_at 
+                    FROM invoices 
+                    WHERE tenant_id = ? 
+                    ORDER BY created_at DESC 
+                    LIMIT ? OFFSET ?
+                """.trimIndent()).use { ps ->
+                    ps.setString(1, tenantId)
+                    ps.setInt(2, limit)
+                    ps.setInt(3, offset)
+                    val rs = ps.executeQuery()
+                    while (rs.next()) {
+                        list.add(
+                            CommercialInvoiceRecord(
+                                id = rs.getString("id"),
+                                tenantId = rs.getString("tenant_id"),
+                                invoiceNumber = rs.getString("invoice_number"),
+                                planName = rs.getString("plan_name"),
+                                periodStart = rs.getTimestamp("period_start")?.time,
+                                periodEnd = rs.getTimestamp("period_end")?.time,
+                                totalAmountIdr = rs.getDouble("total_amount_idr"),
+                                status = rs.getString("status"),
+                                paymentGateway = rs.getString("payment_gateway"),
+                                gatewayOrderId = rs.getString("gateway_order_id"),
+                                paymentUrl = "https://app.sandbox.midtrans.com/snap/v2/vtweb/${rs.getString("gateway_order_id")}",
+                                snapToken = rs.getString("gateway_order_id"),
+                                createdAt = rs.getTimestamp("created_at")?.time
+                            )
+                        )
+                    }
+                }
+            }
+            Pair(count, list)
         }
     }
 

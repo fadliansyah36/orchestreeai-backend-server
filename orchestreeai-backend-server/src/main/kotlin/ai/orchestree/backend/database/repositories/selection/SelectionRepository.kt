@@ -444,6 +444,83 @@ class SelectionRepository(
         emptyList()
     }
 
+    suspend fun getSelectionResultsPaginated(
+        requestId: String,
+        tenantId: String,
+        limit: Int = ai.orchestree.backend.util.PaginationDefaults.DEFAULT_LIMIT,
+        offset: Int = 0
+    ): Pair<Long, List<SelectionResultRecord>> = withContext(Dispatchers.IO) {
+        var count = 0L
+        val list = mutableListOf<SelectionResultRecord>()
+        try {
+            val conn = ai.orchestree.backend.billing.DatabaseManager.getConnection()
+            conn?.use { c ->
+                try {
+                    c.prepareStatement("SELECT count(*) FROM selection_results WHERE selection_request_id = CAST(? AS uuid)").use { ps ->
+                        ps.setString(1, requestId)
+                        ps.executeQuery().use { rs -> if (rs.next()) count = rs.getLong(1) }
+                    }
+                } catch (_: Exception) {
+                    try {
+                        c.prepareStatement("SELECT count(*) FROM selection_results WHERE selection_request_id = ?").use { ps ->
+                            ps.setString(1, requestId)
+                            ps.executeQuery().use { rs -> if (rs.next()) count = rs.getLong(1) }
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                if (count > 0L) {
+                    val query = """
+                        SELECT id, selection_request_id, total_score, rank_position, priority_level, 
+                               recommendation_classification, risk_score, confidence_score, 
+                               ai_insight_text, human_review_status, human_reviewer_id, human_review_notes, human_reviewed_at
+                        FROM selection_results 
+                        WHERE selection_request_id = CAST(? AS uuid) 
+                        ORDER BY rank_position ASC 
+                        LIMIT ? OFFSET ?
+                    """.trimIndent()
+                    try {
+                        c.prepareStatement(query).use { ps ->
+                            ps.setString(1, requestId)
+                            ps.setInt(2, limit)
+                            ps.setInt(3, offset)
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    list.add(
+                                        SelectionResultRecord(
+                                            id = rs.getString("id"),
+                                            selection_request_id = rs.getString("selection_request_id") ?: requestId,
+                                            total_score = rs.getDouble("total_score"),
+                                            rank_position = rs.getInt("rank_position"),
+                                            priority_level = rs.getString("priority_level") ?: "medium",
+                                            recommendation_classification = rs.getString("recommendation_classification") ?: "review",
+                                            risk_score = rs.getDouble("risk_score"),
+                                            confidence_score = rs.getDouble("confidence_score"),
+                                            ai_insight_text = rs.getString("ai_insight_text"),
+                                            human_review_status = rs.getString("human_review_status") ?: "pending_review",
+                                            human_reviewer_id = rs.getString("human_reviewer_id"),
+                                            human_review_notes = rs.getString("human_review_notes"),
+                                            human_reviewed_at = rs.getString("human_reviewed_at")
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (_: Exception) {}
+
+        if (list.isNotEmpty() || count > 0L) {
+            return@withContext Pair(count, list)
+        }
+
+        val allResults = getSelectionResults(requestId, tenantId)
+        val total = allResults.size.toLong()
+        val paged = allResults.drop(offset).take(limit)
+        Pair(total, paged)
+    }
+
     suspend fun getSelectionCriteria(requestId: String, tenantId: String): List<SelectionCriterionRecord> = withContext(Dispatchers.IO) {
         try {
             val res = supabase.queryTable("selection_criteria", tenantId, "selection_request_id=eq.$requestId")
@@ -502,6 +579,73 @@ class SelectionRepository(
         emptyList()
     }
 
+    suspend fun getSelectionAnalyticsPaginated(
+        requestId: String,
+        tenantId: String,
+        limit: Int = ai.orchestree.backend.util.PaginationDefaults.DEFAULT_LIMIT,
+        offset: Int = 0
+    ): Pair<Long, List<SelectionAnalyticsSummaryRecord>> = withContext(Dispatchers.IO) {
+        var count = 0L
+        val list = mutableListOf<SelectionAnalyticsSummaryRecord>()
+        try {
+            val conn = ai.orchestree.backend.billing.DatabaseManager.getConnection()
+            conn?.use { c ->
+                try {
+                    c.prepareStatement("SELECT count(*) FROM selection_analytics_summary WHERE selection_request_id = CAST(? AS uuid)").use { ps ->
+                        ps.setString(1, requestId)
+                        ps.executeQuery().use { rs -> if (rs.next()) count = rs.getLong(1) }
+                    }
+                } catch (_: Exception) {
+                    try {
+                        c.prepareStatement("SELECT count(*) FROM selection_analytics_summary WHERE selection_request_id = ?").use { ps ->
+                            ps.setString(1, requestId)
+                            ps.executeQuery().use { rs -> if (rs.next()) count = rs.getLong(1) }
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                if (count > 0L) {
+                    val query = """
+                        SELECT id, selection_request_id, metric_type, suggested_chart_type
+                        FROM selection_analytics_summary 
+                        WHERE selection_request_id = CAST(? AS uuid) 
+                        LIMIT ? OFFSET ?
+                    """.trimIndent()
+                    try {
+                        c.prepareStatement(query).use { ps ->
+                            ps.setString(1, requestId)
+                            ps.setInt(2, limit)
+                            ps.setInt(3, offset)
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    list.add(
+                                        SelectionAnalyticsSummaryRecord(
+                                            id = rs.getString("id"),
+                                            selection_request_id = rs.getString("selection_request_id") ?: requestId,
+                                            metric_type = rs.getString("metric_type") ?: "kpi",
+                                            metric_data = buildJsonObject {},
+                                            suggested_chart_type = rs.getString("suggested_chart_type") ?: "bar",
+                                            chart_data_payload = null
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (_: Exception) {}
+
+        if (list.isNotEmpty() || count > 0L) {
+            return@withContext Pair(count, list)
+        }
+
+        val allAnalytics = getSelectionAnalytics(requestId, tenantId)
+        val total = allAnalytics.size.toLong()
+        val paged = allAnalytics.drop(offset).take(limit)
+        Pair(total, paged)
+    }
+
     suspend fun listSelectionRequests(tenantId: String): List<SelectionRequestRecord> = withContext(Dispatchers.IO) {
         try {
             val res = supabase.queryTable("selection_requests", tenantId, "tenant_id=eq.$tenantId&order=created_at.desc")
@@ -528,6 +672,70 @@ class SelectionRepository(
             logger.error("Error listing selection requests: ${e.message}", e)
         }
         requestsCache.values.filter { it.tenant_id == tenantId }.toList()
+    }
+
+    suspend fun listSelectionRequestsPaginated(
+        tenantId: String,
+        limit: Int = ai.orchestree.backend.util.PaginationDefaults.DEFAULT_LIMIT,
+        offset: Int = 0
+    ): Pair<Long, List<SelectionRequestRecord>> = withContext(Dispatchers.IO) {
+        var count = 0L
+        val list = mutableListOf<SelectionRequestRecord>()
+        try {
+            val conn = ai.orchestree.backend.billing.DatabaseManager.getConnection()
+            conn?.use { c ->
+                try {
+                    c.prepareStatement("SELECT count(*) FROM selection_requests WHERE tenant_id = ?").use { ps ->
+                        ps.setString(1, tenantId)
+                        ps.executeQuery().use { rs -> if (rs.next()) count = rs.getLong(1) }
+                    }
+                } catch (_: Exception) {}
+
+                if (count > 0L) {
+                    val query = """
+                        SELECT id, tenant_id, requested_by_user_id, domain_category, assigned_ai_job_title_id, 
+                               prompt_text, source_type, status, created_at
+                        FROM selection_requests
+                        WHERE tenant_id = ?
+                        ORDER BY created_at DESC
+                        LIMIT ? OFFSET ?
+                    """.trimIndent()
+                    try {
+                        c.prepareStatement(query).use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.setInt(2, limit)
+                            ps.setInt(3, offset)
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    list.add(
+                                        SelectionRequestRecord(
+                                            id = rs.getString("id"),
+                                            tenant_id = rs.getString("tenant_id") ?: tenantId,
+                                            requested_by_user_id = rs.getString("requested_by_user_id") ?: "",
+                                            domain_category = rs.getString("domain_category"),
+                                            assigned_ai_job_title_id = rs.getString("assigned_ai_job_title_id"),
+                                            prompt_text = rs.getString("prompt_text") ?: "",
+                                            source_type = rs.getString("source_type") ?: "file_upload",
+                                            status = rs.getString("status") ?: "pending",
+                                            created_at = rs.getString("created_at")
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+        } catch (_: Exception) {}
+
+        if (list.isNotEmpty() || count > 0L) {
+            return@withContext Pair(count, list)
+        }
+
+        val allRequests = listSelectionRequests(tenantId)
+        val total = allRequests.size.toLong()
+        val paged = allRequests.drop(offset).take(limit)
+        Pair(total, paged)
     }
 
     suspend fun createCalibrationSetting(setting: SelectionCalibrationSettingRecord): Result<SelectionCalibrationSettingRecord> = withContext(Dispatchers.IO) {

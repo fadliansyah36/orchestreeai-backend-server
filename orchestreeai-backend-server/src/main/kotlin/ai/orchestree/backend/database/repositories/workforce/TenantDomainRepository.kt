@@ -207,13 +207,29 @@ object TenantDomainRepository {
         )
     }
 
-    fun getDailyReports(tenantId: String): List<WorkReportDailyItem> {
-        val conn = DatabaseManager.getConnection() ?: return emptyList()
+    fun getDailyReports(tenantId: String): List<WorkReportDailyItem> = getDailyReportsPaginated(tenantId, 50, 0).second
+
+    fun getDailyReportsPaginated(tenantId: String, limit: Int = 20, offset: Int = 0): Pair<Long, List<WorkReportDailyItem>> {
+        val conn = DatabaseManager.getConnection() ?: return Pair(0L, emptyList())
         return conn.use { c ->
+            var total = 0L
+            try {
+                c.prepareStatement("SELECT count(*) FROM work_reports_daily WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                    ps.setString(1, tenantId)
+                    ps.executeQuery().use { rs ->
+                        if (rs.next()) total = rs.getLong(1)
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Error counting work_reports_daily: ${e.message}")
+            }
+
             val list = mutableListOf<WorkReportDailyItem>()
             try {
-                c.prepareStatement("SELECT id, tenant_id, staff_id, staff_name, report_date, work_summary, blockers_and_challenges, plan_for_tomorrow FROM work_reports_daily WHERE tenant_id = ? OR tenant_id = 'tenant-default' ORDER BY submitted_at DESC LIMIT 50").use { ps ->
+                c.prepareStatement("SELECT id, tenant_id, staff_id, staff_name, report_date, work_summary, blockers_and_challenges, plan_for_tomorrow FROM work_reports_daily WHERE tenant_id = ? OR tenant_id = 'tenant-default' ORDER BY submitted_at DESC LIMIT ? OFFSET ?").use { ps ->
                     ps.setString(1, tenantId)
+                    ps.setInt(2, limit)
+                    ps.setInt(3, offset)
                     ps.executeQuery().use { rs ->
                         while (rs.next()) {
                             list.add(
@@ -233,9 +249,9 @@ object TenantDomainRepository {
                     }
                 }
             } catch (e: Exception) {
-                logger.warn("Error querying work_reports_daily: ${e.message}")
+                logger.warn("Error querying work_reports_daily paginated: ${e.message}")
             }
-            list
+            Pair(total, list)
         }
     }
 
@@ -278,13 +294,29 @@ object TenantDomainRepository {
         )
     }
 
-    fun getGoals(tenantId: String): List<GoalKpiItem> {
-        val conn = DatabaseManager.getConnection() ?: return emptyList()
+    fun getGoals(tenantId: String): List<GoalKpiItem> = getGoalsPaginated(tenantId, 50, 0).second
+
+    fun getGoalsPaginated(tenantId: String, limit: Int = 20, offset: Int = 0): Pair<Long, List<GoalKpiItem>> {
+        val conn = DatabaseManager.getConnection() ?: return Pair(0L, emptyList())
         return conn.use { c ->
+            var total = 0L
+            try {
+                c.prepareStatement("SELECT count(*) FROM goals_kpi WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                    ps.setString(1, tenantId)
+                    ps.executeQuery().use { rs ->
+                        if (rs.next()) total = rs.getLong(1)
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Error counting goals_kpi: ${e.message}")
+            }
+
             val list = mutableListOf<GoalKpiItem>()
             try {
-                c.prepareStatement("SELECT id, tenant_id, title, target_value, current_value, unit, period, status FROM goals_kpi WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                c.prepareStatement("SELECT id, tenant_id, title, target_value, current_value, unit, period, status FROM goals_kpi WHERE tenant_id = ? OR tenant_id = 'tenant-default' ORDER BY id ASC LIMIT ? OFFSET ?").use { ps ->
                     ps.setString(1, tenantId)
+                    ps.setInt(2, limit)
+                    ps.setInt(3, offset)
                     ps.executeQuery().use { rs ->
                         while (rs.next()) {
                             list.add(
@@ -303,19 +335,35 @@ object TenantDomainRepository {
                     }
                 }
             } catch (e: Exception) {
-                logger.warn("Error querying goals_kpi: ${e.message}")
+                logger.warn("Error querying goals_kpi paginated: ${e.message}")
             }
-            list
+            Pair(total, list)
         }
     }
 
-    fun getReviews(tenantId: String): List<PerformanceReviewItem> {
-        val conn = DatabaseManager.getConnection() ?: return emptyList()
+    fun getReviews(tenantId: String): List<PerformanceReviewItem> = getReviewsPaginated(tenantId, 50, 0).second
+
+    fun getReviewsPaginated(tenantId: String, limit: Int = 20, offset: Int = 0): Pair<Long, List<PerformanceReviewItem>> {
+        val conn = DatabaseManager.getConnection() ?: return Pair(0L, emptyList())
         return conn.use { c ->
+            var total = 0L
+            try {
+                c.prepareStatement("SELECT count(*) FROM performance_reviews WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                    ps.setString(1, tenantId)
+                    ps.executeQuery().use { rs ->
+                        if (rs.next()) total = rs.getLong(1)
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Error counting performance_reviews: ${e.message}")
+            }
+
             val list = mutableListOf<PerformanceReviewItem>()
             try {
-                c.prepareStatement("SELECT id, tenant_id, staff_id, reviewer_id, review_period, actual_calculated_score, manager_feedback, status FROM performance_reviews WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                c.prepareStatement("SELECT id, tenant_id, staff_id, reviewer_id, review_period, actual_calculated_score, manager_feedback, status FROM performance_reviews WHERE tenant_id = ? OR tenant_id = 'tenant-default' ORDER BY id ASC LIMIT ? OFFSET ?").use { ps ->
                     ps.setString(1, tenantId)
+                    ps.setInt(2, limit)
+                    ps.setInt(3, offset)
                     ps.executeQuery().use { rs ->
                         while (rs.next()) {
                             list.add(
@@ -334,19 +382,35 @@ object TenantDomainRepository {
                     }
                 }
             } catch (e: Exception) {
-                logger.warn("Error querying performance_reviews: ${e.message}")
+                logger.warn("Error querying performance_reviews paginated: ${e.message}")
             }
-            list
+            Pair(total, list)
         }
     }
 
-    fun getPredictions(tenantId: String): List<PerformanceRiskPredictionItem> {
-        val conn = DatabaseManager.getConnection() ?: return emptyList()
+    fun getPredictions(tenantId: String): List<PerformanceRiskPredictionItem> = getPredictionsPaginated(tenantId, 50, 0).second
+
+    fun getPredictionsPaginated(tenantId: String, limit: Int = 20, offset: Int = 0): Pair<Long, List<PerformanceRiskPredictionItem>> {
+        val conn = DatabaseManager.getConnection() ?: return Pair(0L, emptyList())
         return conn.use { c ->
+            var total = 0L
+            try {
+                c.prepareStatement("SELECT count(*) FROM performance_risk_predictions WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                    ps.setString(1, tenantId)
+                    ps.executeQuery().use { rs ->
+                        if (rs.next()) total = rs.getLong(1)
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Error counting performance_risk_predictions: ${e.message}")
+            }
+
             val list = mutableListOf<PerformanceRiskPredictionItem>()
             try {
-                c.prepareStatement("SELECT id, tenant_id, entity_id, entity_name, risk_level, current_score, top_risk_factors_json, preventive_actions_json FROM performance_risk_predictions WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                c.prepareStatement("SELECT id, tenant_id, entity_id, entity_name, risk_level, current_score, top_risk_factors_json, preventive_actions_json FROM performance_risk_predictions WHERE tenant_id = ? OR tenant_id = 'tenant-default' ORDER BY id ASC LIMIT ? OFFSET ?").use { ps ->
                     ps.setString(1, tenantId)
+                    ps.setInt(2, limit)
+                    ps.setInt(3, offset)
                     ps.executeQuery().use { rs ->
                         while (rs.next()) {
                             list.add(
@@ -365,9 +429,9 @@ object TenantDomainRepository {
                     }
                 }
             } catch (e: Exception) {
-                logger.warn("Error querying performance_risk_predictions: ${e.message}")
+                logger.warn("Error querying performance_risk_predictions paginated: ${e.message}")
             }
-            list
+            Pair(total, list)
         }
     }
 
@@ -406,13 +470,29 @@ object TenantDomainRepository {
         }
     }
 
-    fun getSecurityAnomalies(tenantId: String): List<SecurityAnomalyItem> {
-        val conn = DatabaseManager.getConnection() ?: return emptyList()
+    fun getSecurityAnomalies(tenantId: String): List<SecurityAnomalyItem> = getSecurityAnomaliesPaginated(tenantId, 50, 0).second
+
+    fun getSecurityAnomaliesPaginated(tenantId: String, limit: Int = 20, offset: Int = 0): Pair<Long, List<SecurityAnomalyItem>> {
+        val conn = DatabaseManager.getConnection() ?: return Pair(0L, emptyList())
         return conn.use { c ->
+            var total = 0L
+            try {
+                c.prepareStatement("SELECT count(*) FROM security_incidents WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                    ps.setString(1, tenantId)
+                    ps.executeQuery().use { rs ->
+                        if (rs.next()) total = rs.getLong(1)
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Error counting security_incidents: ${e.message}")
+            }
+
             val list = mutableListOf<SecurityAnomalyItem>()
             try {
-                c.prepareStatement("SELECT id, tenant_id, incident_type, severity, description, detected_at, status FROM security_incidents WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                c.prepareStatement("SELECT id, tenant_id, incident_type, severity, description, detected_at, status FROM security_incidents WHERE tenant_id = ? OR tenant_id = 'tenant-default' ORDER BY detected_at DESC LIMIT ? OFFSET ?").use { ps ->
                     ps.setString(1, tenantId)
+                    ps.setInt(2, limit)
+                    ps.setInt(3, offset)
                     ps.executeQuery().use { rs ->
                         while (rs.next()) {
                             list.add(
@@ -430,19 +510,35 @@ object TenantDomainRepository {
                     }
                 }
             } catch (e: Exception) {
-                logger.warn("Error querying security_incidents: ${e.message}")
+                logger.warn("Error querying security_incidents paginated: ${e.message}")
             }
-            list
+            Pair(total, list)
         }
     }
 
-    fun getDataSubjectRequests(tenantId: String): List<DataSubjectRequestItem> {
-        val conn = DatabaseManager.getConnection() ?: return emptyList()
+    fun getDataSubjectRequests(tenantId: String): List<DataSubjectRequestItem> = getDataSubjectRequestsPaginated(tenantId, 50, 0).second
+
+    fun getDataSubjectRequestsPaginated(tenantId: String, limit: Int = 20, offset: Int = 0): Pair<Long, List<DataSubjectRequestItem>> {
+        val conn = DatabaseManager.getConnection() ?: return Pair(0L, emptyList())
         return conn.use { c ->
+            var total = 0L
+            try {
+                c.prepareStatement("SELECT count(*) FROM data_subject_requests WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                    ps.setString(1, tenantId)
+                    ps.executeQuery().use { rs ->
+                        if (rs.next()) total = rs.getLong(1)
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Error counting data_subject_requests: ${e.message}")
+            }
+
             val list = mutableListOf<DataSubjectRequestItem>()
             try {
-                c.prepareStatement("SELECT id, tenant_id, request_type, customer_email, status, requested_at FROM data_subject_requests WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                c.prepareStatement("SELECT id, tenant_id, request_type, customer_email, status, requested_at FROM data_subject_requests WHERE tenant_id = ? OR tenant_id = 'tenant-default' ORDER BY requested_at DESC LIMIT ? OFFSET ?").use { ps ->
                     ps.setString(1, tenantId)
+                    ps.setInt(2, limit)
+                    ps.setInt(3, offset)
                     ps.executeQuery().use { rs ->
                         while (rs.next()) {
                             list.add(
@@ -459,9 +555,9 @@ object TenantDomainRepository {
                     }
                 }
             } catch (e: Exception) {
-                logger.warn("Error querying data_subject_requests: ${e.message}")
+                logger.warn("Error querying data_subject_requests paginated: ${e.message}")
             }
-            list
+            Pair(total, list)
         }
     }
 
@@ -499,13 +595,29 @@ object TenantDomainRepository {
         )
     }
 
-    fun getAttendanceAnomalies(tenantId: String): List<AttendanceAnomalyItem> {
-        val conn = DatabaseManager.getConnection() ?: return emptyList()
+    fun getAttendanceAnomalies(tenantId: String): List<AttendanceAnomalyItem> = getAttendanceAnomaliesPaginated(tenantId, 50, 0).second
+
+    fun getAttendanceAnomaliesPaginated(tenantId: String, limit: Int = 20, offset: Int = 0): Pair<Long, List<AttendanceAnomalyItem>> {
+        val conn = DatabaseManager.getConnection() ?: return Pair(0L, emptyList())
         return conn.use { c ->
+            var total = 0L
+            try {
+                c.prepareStatement("SELECT count(*) FROM attendance_anomalies WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                    ps.setString(1, tenantId)
+                    ps.executeQuery().use { rs ->
+                        if (rs.next()) total = rs.getLong(1)
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Error counting attendance_anomalies: ${e.message}")
+            }
+
             val list = mutableListOf<AttendanceAnomalyItem>()
             try {
-                c.prepareStatement("SELECT id, tenant_id, user_id, user_name, anomaly_type, created_at, resolved, details FROM attendance_anomalies WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                c.prepareStatement("SELECT id, tenant_id, user_id, user_name, anomaly_type, created_at, resolved, details FROM attendance_anomalies WHERE tenant_id = ? OR tenant_id = 'tenant-default' ORDER BY created_at DESC LIMIT ? OFFSET ?").use { ps ->
                     ps.setString(1, tenantId)
+                    ps.setInt(2, limit)
+                    ps.setInt(3, offset)
                     ps.executeQuery().use { rs ->
                         while (rs.next()) {
                             val isResolved = rs.getBoolean("resolved")
@@ -525,9 +637,9 @@ object TenantDomainRepository {
                     }
                 }
             } catch (e: Exception) {
-                logger.warn("Error querying attendance_anomalies: ${e.message}")
+                logger.warn("Error querying attendance_anomalies paginated: ${e.message}")
             }
-            list
+            Pair(total, list)
         }
     }
 

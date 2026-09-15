@@ -6,6 +6,8 @@ import ai.orchestree.backend.memory.HybridSearchEngine
 import ai.orchestree.backend.modelrouter.ModelRouteRequest
 import ai.orchestree.backend.modelrouter.ModelRouter
 import ai.orchestree.backend.security.PromptInjectionGuard
+import ai.orchestree.backend.util.PagedResponse
+import ai.orchestree.backend.util.PaginationDefaults
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
@@ -117,42 +119,74 @@ fun Route.chatRoutes() {
 
         get("/history/{conversationId}") {
             val convId = call.parameters["conversationId"] ?: ""
-            val history = rollingMemory.getRollingHistory(convId)
-            if (history.isNotEmpty()) {
-                call.respond(HttpStatusCode.OK, history.map { mapOf("role" to it.first, "content" to it.second) })
-                return@get
-            }
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
 
-            // Check InMemoryConversationStore
-            val inMemoryHistory = InMemoryConversationStore.getHistory(convId)
-            if (inMemoryHistory.isNotEmpty()) {
-                call.respond(HttpStatusCode.OK, inMemoryHistory.map { mapOf("role" to it.role, "content" to it.text) })
-                return@get
-            }
-
-            // Query database conversation_messages table
-            val dbMessages = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            // 1. Query database conversation_messages table first (DESCENDING - newest first)
+            val (dbTotal, dbMessages) = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                var count = 0L
                 val list = mutableListOf<Map<String, String>>()
                 try {
                     val conn = ai.orchestree.backend.billing.DatabaseManager.getConnection()
                     conn?.use { c ->
-                        c.prepareStatement("SELECT sender_type, message_text FROM conversation_messages WHERE conversation_id = ? ORDER BY created_at ASC").use { ps ->
+                        c.prepareStatement("SELECT count(*) FROM conversation_messages WHERE conversation_id = ?").use { ps ->
                             ps.setString(1, convId)
                             ps.executeQuery().use { rs ->
-                                while (rs.next()) {
-                                    val senderType = rs.getString("sender_type") ?: "CUSTOMER"
-                                    val role = if (senderType.equals("CUSTOMER", ignoreCase = true) || senderType.equals("user", ignoreCase = true)) "user" else "assistant"
-                                    val content = rs.getString("message_text") ?: ""
-                                    list.add(mapOf("role" to role, "content" to content))
+                                if (rs.next()) count = rs.getLong(1)
+                            }
+                        }
+                        if (count > 0L) {
+                            c.prepareStatement("""
+                                SELECT sender_type, message_text 
+                                FROM conversation_messages 
+                                WHERE conversation_id = ? 
+                                ORDER BY created_at DESC 
+                                LIMIT ? OFFSET ?
+                            """.trimIndent()).use { ps ->
+                                ps.setString(1, convId)
+                                ps.setInt(2, limit)
+                                ps.setInt(3, offset)
+                                ps.executeQuery().use { rs ->
+                                    while (rs.next()) {
+                                        val senderType = rs.getString("sender_type") ?: "CUSTOMER"
+                                        val role = if (senderType.equals("CUSTOMER", ignoreCase = true) || senderType.equals("user", ignoreCase = true)) "user" else "assistant"
+                                        val content = rs.getString("message_text") ?: ""
+                                        list.add(mapOf("role" to role, "content" to content))
+                                    }
                                 }
                             }
                         }
                     }
                 } catch (_: Exception) {}
-                list
+                Pair(count, list)
             }
 
-            call.respond(HttpStatusCode.OK, dbMessages)
+            if (dbTotal > 0L || dbMessages.isNotEmpty()) {
+                call.respond(HttpStatusCode.OK, PagedResponse(items = dbMessages, total = dbTotal, limit = limit, offset = offset))
+                return@get
+            }
+
+            // 2. Fallback to rollingMemory (DESCENDING - newest first)
+            val history = rollingMemory.getRollingHistory(convId)
+            if (history.isNotEmpty()) {
+                val reversed = history.asReversed().map { mapOf("role" to it.first, "content" to it.second) }
+                val total = reversed.size.toLong()
+                val paged = reversed.drop(offset).take(limit)
+                call.respond(HttpStatusCode.OK, PagedResponse(items = paged, total = total, limit = limit, offset = offset))
+                return@get
+            }
+
+            // 3. Fallback to InMemoryConversationStore (DESCENDING - newest first)
+            val inMemoryHistory = InMemoryConversationStore.getHistory(convId)
+            if (inMemoryHistory.isNotEmpty()) {
+                val reversed = inMemoryHistory.asReversed().map { mapOf("role" to it.role, "content" to it.text) }
+                val total = reversed.size.toLong()
+                val paged = reversed.drop(offset).take(limit)
+                call.respond(HttpStatusCode.OK, PagedResponse(items = paged, total = total, limit = limit, offset = offset))
+                return@get
+            }
+
+            call.respond(HttpStatusCode.OK, PagedResponse<Map<String, String>>(items = emptyList(), total = 0L, limit = limit, offset = offset))
         }
     }
 

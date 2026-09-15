@@ -5,6 +5,8 @@ import ai.orchestree.backend.memory.CandidateInteraction
 import ai.orchestree.backend.memory.HybridMemorySearchEngine
 import ai.orchestree.backend.memory.MemoryConsolidator
 import ai.orchestree.backend.memory.MemoryDecayEngine
+import ai.orchestree.backend.util.PagedResponse
+import ai.orchestree.backend.util.PaginationDefaults
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
@@ -69,10 +71,12 @@ fun Route.memoryRoutes(
 
         // Daftar dokumen memori aktif / arsip
         get("/documents") {
-            val tenantId = call.parameters["tenantId"] ?: "tenant-default"
-            val includeArchived = call.parameters["includeArchived"]?.toBoolean() ?: false
-            val docs = memoryRepo.listByTenant(tenantId, includeArchived)
-            call.respond(HttpStatusCode.OK, docs)
+            val tenantId = call.request.queryParameters["tenantId"] ?: call.parameters["tenantId"] ?: "tenant-default"
+            val includeArchived = call.request.queryParameters["includeArchived"]?.toBoolean() ?: call.parameters["includeArchived"]?.toBoolean() ?: false
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            val (total, docs) = memoryRepo.listByTenantPaginated(tenantId, includeArchived, limit, offset)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = docs, total = total, limit = limit, offset = offset))
         }
     }
 }

@@ -11,6 +11,8 @@ import ai.orchestree.backend.modelrouter.ModelRouteRequest
 import ai.orchestree.backend.conversation.SalesIntentClassifier
 import ai.orchestree.backend.conversation.SalesIntentCode
 import ai.orchestree.backend.channels.isolation.AudienceScope
+import ai.orchestree.backend.util.PagedResponse
+import ai.orchestree.backend.util.PaginationDefaults
 import ai.orchestree.backend.webhooks.PaymentWebhookHandler
 import ai.orchestree.backend.webhooks.WebhookSignatureValidator
 import io.ktor.http.ContentType
@@ -581,23 +583,68 @@ fun Route.omnichannelSalesRoutes() {
         // Omnichannel Inbox (PRD Addendum 1 Bagian 35.4, 51)
         get("/inbox/conversations") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val list = withContext(Dispatchers.IO) {
+            val channelParam = call.request.queryParameters["channel"]?.trim()
+            val statusParam = call.request.queryParameters["status"]?.trim()
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+
+            val (total, list) = withContext(Dispatchers.IO) {
+                var totalCount = 0L
                 val convs = mutableListOf<InboxConversationItem>()
                 try {
                     val conn = DatabaseManager.getConnection()
                     conn?.use { c ->
-                        c.prepareStatement("""
+                        val conditions = mutableListOf("conv.tenant_id = ?")
+                        val params = mutableListOf<Any>(tenantId)
+
+                        if (!channelParam.isNullOrBlank() && channelParam != "all") {
+                            conditions.add("UPPER(conv.channel_type) = UPPER(?)")
+                            params.add(channelParam)
+                        }
+                        if (!statusParam.isNullOrBlank() && statusParam != "all") {
+                            conditions.add("(UPPER(conv.status) = UPPER(?) OR UPPER(conv.sales_stage) = UPPER(?))")
+                            params.add(statusParam)
+                            params.add(statusParam)
+                        }
+
+                        val whereClause = conditions.joinToString(" AND ")
+
+                        val countSql = """
+                            SELECT count(*) 
+                            FROM conversations conv 
+                            LEFT JOIN customers cust ON conv.customer_id = cust.id 
+                            WHERE $whereClause
+                        """.trimIndent()
+
+                        c.prepareStatement(countSql).use { ps ->
+                            params.forEachIndexed { index, param ->
+                                ps.setObject(index + 1, param)
+                            }
+                            ps.executeQuery().use { rs ->
+                                if (rs.next()) totalCount = rs.getLong(1)
+                            }
+                        }
+
+                        val dataSql = """
                             SELECT conv.id, conv.tenant_id, 
                                    COALESCE(cust.display_name, conv.customer_channel_identifier) as customer_name,
                                    conv.channel_type, conv.sales_stage, conv.last_message_snippet, conv.unread_count,
                                    conv.assigned_persona
                             FROM conversations conv
                             LEFT JOIN customers cust ON conv.customer_id = cust.id
-                            WHERE conv.tenant_id = ?
+                            WHERE $whereClause
                             ORDER BY conv.last_activity_at DESC NULLS LAST
-                            LIMIT 50
-                        """.trimIndent()).use { ps ->
-                            ps.setString(1, tenantId)
+                            LIMIT ? OFFSET ?
+                        """.trimIndent()
+
+                        c.prepareStatement(dataSql).use { ps ->
+                            var paramIdx = 1
+                            params.forEach { param ->
+                                ps.setObject(paramIdx++, param)
+                            }
+                            ps.setInt(paramIdx++, limit)
+                            ps.setInt(paramIdx, offset)
+
                             ps.executeQuery().use { rs ->
                                 while (rs.next()) {
                                     convs.add(
@@ -618,9 +665,17 @@ fun Route.omnichannelSalesRoutes() {
                     }
                 } catch (_: Exception) {}
 
-                if (convs.isEmpty()) {
-                    val inMem = InMemoryConversationStore.listConversations(tenantId)
-                    inMem.forEach { m ->
+                if (convs.isEmpty() && totalCount == 0L) {
+                    var inMem = InMemoryConversationStore.listConversations(tenantId)
+                    if (!channelParam.isNullOrBlank() && channelParam != "all") {
+                        inMem = inMem.filter { m ->
+                            val ch = if (m.id.contains("tg")) "TELEGRAM" else "WHATSAPP"
+                            ch.equals(channelParam, ignoreCase = true)
+                        }
+                    }
+                    totalCount = inMem.size.toLong()
+                    val pagedMem = inMem.drop(offset).take(limit)
+                    pagedMem.forEach { m ->
                         convs.add(
                             InboxConversationItem(
                                 id = m.id,
@@ -636,30 +691,53 @@ fun Route.omnichannelSalesRoutes() {
                     }
                 }
 
-                convs
+                Pair(totalCount, convs)
             }
-            call.respond(HttpStatusCode.OK, list)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = list, total = total, limit = limit, offset = offset))
         }
 
         // Leads Pipeline (PRD Addendum 1 Bagian 37, 51)
         get("/leads") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
             val statusParam = call.request.queryParameters["status"]?.trim()
-            val list = withContext(Dispatchers.IO) {
+            val channelParam = call.request.queryParameters["channel"]?.trim()
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+
+            val (total, list) = withContext(Dispatchers.IO) {
+                var totalCount = 0L
                 val leads = mutableListOf<LeadItem>()
                 try {
                     val conn = DatabaseManager.getConnection()
                     conn?.use { c ->
-                        val sql = if (statusParam.isNullOrBlank() || statusParam == "all") {
-                            "SELECT id, customer_name, status, qualification_score, source_channel FROM leads WHERE tenant_id = ? ORDER BY created_at DESC"
-                        } else {
-                            "SELECT id, customer_name, status, qualification_score, source_channel FROM leads WHERE tenant_id = ? AND status = ? ORDER BY created_at DESC"
+                        val conditions = mutableListOf("tenant_id = ?")
+                        val params = mutableListOf<Any>(tenantId)
+
+                        if (!statusParam.isNullOrBlank() && statusParam != "all") {
+                            conditions.add("status = ?")
+                            params.add(statusParam)
                         }
-                        c.prepareStatement(sql).use { ps ->
-                            ps.setString(1, tenantId)
-                            if (!statusParam.isNullOrBlank() && statusParam != "all") {
-                                ps.setString(2, statusParam)
+                        if (!channelParam.isNullOrBlank() && channelParam != "all") {
+                            conditions.add("source_channel = ?")
+                            params.add(channelParam)
+                        }
+
+                        val whereClause = conditions.joinToString(" AND ")
+
+                        val countSql = "SELECT count(*) FROM leads WHERE $whereClause"
+                        c.prepareStatement(countSql).use { ps ->
+                            params.forEachIndexed { idx, p -> ps.setObject(idx + 1, p) }
+                            ps.executeQuery().use { rs ->
+                                if (rs.next()) totalCount = rs.getLong(1)
                             }
+                        }
+
+                        val dataSql = "SELECT id, customer_name, status, qualification_score, source_channel FROM leads WHERE $whereClause ORDER BY created_at DESC LIMIT ? OFFSET ?"
+                        c.prepareStatement(dataSql).use { ps ->
+                            var idx = 1
+                            params.forEach { p -> ps.setObject(idx++, p) }
+                            ps.setInt(idx++, limit)
+                            ps.setInt(idx, offset)
                             ps.executeQuery().use { rs ->
                                 while (rs.next()) {
                                     leads.add(
@@ -676,9 +754,9 @@ fun Route.omnichannelSalesRoutes() {
                         }
                     }
                 } catch (_: Exception) {}
-                leads
+                Pair(totalCount, leads)
             }
-            call.respond(HttpStatusCode.OK, list)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = list, total = total, limit = limit, offset = offset))
         }
 
         post("/leads") {
@@ -722,21 +800,33 @@ fun Route.omnichannelSalesRoutes() {
         // Product Catalog & Inventory (PRD Addendum 1 Bagian 39.1, 51)
         get("/products") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val list = withContext(Dispatchers.IO) {
-                val prods = mutableListOf<ProductItemResponse>()
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            val (total, prods) = withContext(Dispatchers.IO) {
+                var count = 0L
+                val list = mutableListOf<ProductItemResponse>()
                 try {
                     val conn = DatabaseManager.getConnection()
                     conn?.use { c ->
+                        c.prepareStatement("SELECT count(*) FROM products WHERE tenant_id = ? AND is_active = true").use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.executeQuery().use { rs ->
+                                if (rs.next()) count = rs.getLong(1)
+                            }
+                        }
                         c.prepareStatement("""
                             SELECT id, sku, name, description, category, base_price, currency 
                             FROM products 
                             WHERE tenant_id = ? AND is_active = true
                             ORDER BY created_at DESC
+                            LIMIT ? OFFSET ?
                         """.trimIndent()).use { ps ->
                             ps.setString(1, tenantId)
+                            ps.setInt(2, limit)
+                            ps.setInt(3, offset)
                             ps.executeQuery().use { rs ->
                                 while (rs.next()) {
-                                    prods.add(
+                                    list.add(
                                         ProductItemResponse(
                                             id = rs.getString("id"),
                                             sku = rs.getString("sku") ?: "",
@@ -752,9 +842,9 @@ fun Route.omnichannelSalesRoutes() {
                         }
                     }
                 } catch (_: Exception) {}
-                prods
+                Pair(count, list)
             }
-            call.respond(HttpStatusCode.OK, list)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = prods, total = total, limit = limit, offset = offset))
         }
 
         post("/products") {
@@ -790,21 +880,34 @@ fun Route.omnichannelSalesRoutes() {
 
         get("/inventory") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val list = withContext(Dispatchers.IO) {
-                val stockList = mutableListOf<InventoryResponse>()
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            val (total, stockList) = withContext(Dispatchers.IO) {
+                var count = 0L
+                val list = mutableListOf<InventoryResponse>()
                 try {
                     val conn = DatabaseManager.getConnection()
                     conn?.use { c ->
+                        c.prepareStatement("SELECT count(*) FROM inventory_stock WHERE tenant_id = ?").use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.executeQuery().use { rs ->
+                                if (rs.next()) count = rs.getLong(1)
+                            }
+                        }
                         c.prepareStatement("""
                             SELECT s.variant_id, s.available_stock, s.warehouse_location
                             FROM inventory_stock s
                             WHERE s.tenant_id = ?
+                            ORDER BY s.variant_id ASC
+                            LIMIT ? OFFSET ?
                         """.trimIndent()).use { ps ->
                             ps.setString(1, tenantId)
+                            ps.setInt(2, limit)
+                            ps.setInt(3, offset)
                             ps.executeQuery().use { rs ->
                                 while (rs.next()) {
                                     val stock = rs.getInt("available_stock")
-                                    stockList.add(
+                                    list.add(
                                         InventoryResponse(
                                             variantId = rs.getString("variant_id") ?: "",
                                             availableStock = stock,
@@ -817,9 +920,9 @@ fun Route.omnichannelSalesRoutes() {
                         }
                     }
                 } catch (_: Exception) {}
-                stockList
+                Pair(count, list)
             }
-            call.respond(HttpStatusCode.OK, list)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = stockList, total = total, limit = limit, offset = offset))
         }
 
         get("/inventory/{variantId}") {
@@ -861,22 +964,33 @@ fun Route.omnichannelSalesRoutes() {
         // Orders List (PRD Addendum 1 Bagian 39, 51)
         get("/orders") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val list = withContext(Dispatchers.IO) {
-                val orders = mutableListOf<OrderItemResponse>()
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            val (total, orders) = withContext(Dispatchers.IO) {
+                var count = 0L
+                val list = mutableListOf<OrderItemResponse>()
                 try {
                     val conn = DatabaseManager.getConnection()
                     conn?.use { c ->
+                        c.prepareStatement("SELECT count(*) FROM orders WHERE tenant_id = ?").use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.executeQuery().use { rs ->
+                                if (rs.next()) count = rs.getLong(1)
+                            }
+                        }
                         c.prepareStatement("""
                             SELECT id, order_number, customer_name, total_amount, status, payment_method, shipping_address, courier_code, tracking_number, created_at
                             FROM orders 
                             WHERE tenant_id = ?
                             ORDER BY created_at DESC
-                            LIMIT 50
+                            LIMIT ? OFFSET ?
                         """.trimIndent()).use { ps ->
                             ps.setString(1, tenantId)
+                            ps.setInt(2, limit)
+                            ps.setInt(3, offset)
                             ps.executeQuery().use { rs ->
                                 while (rs.next()) {
-                                    orders.add(
+                                    list.add(
                                         OrderItemResponse(
                                             id = rs.getString("id"),
                                             orderNumber = rs.getString("order_number") ?: "",
@@ -895,32 +1009,44 @@ fun Route.omnichannelSalesRoutes() {
                         }
                     }
                 } catch (_: Exception) {}
-                orders
+                Pair(count, list)
             }
-            call.respond(HttpStatusCode.OK, list)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = orders, total = total, limit = limit, offset = offset))
         }
 
         // Marketing Campaign & Content Engine (PRD Addendum 1 Bagian 41, 51)
         get("/campaigns") {
             val tenantId = call.parameters["id"] ?: "tenant-default"
-            val list = withContext(Dispatchers.IO) {
-                val camps = mutableListOf<CampaignItemResponse>()
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            val (total, camps) = withContext(Dispatchers.IO) {
+                var count = 0L
+                val list = mutableListOf<CampaignItemResponse>()
                 try {
                     val conn = DatabaseManager.getConnection()
                     conn?.use { c ->
+                        c.prepareStatement("SELECT count(*) FROM campaigns WHERE tenant_id = ?").use { ps ->
+                            ps.setString(1, tenantId)
+                            ps.executeQuery().use { rs ->
+                                if (rs.next()) count = rs.getLong(1)
+                            }
+                        }
                         c.prepareStatement("""
                             SELECT id, name, target_audience_filter, status, target_channel, total_audience_count, total_read, created_at
                             FROM campaigns 
                             WHERE tenant_id = ?
                             ORDER BY created_at DESC
+                            LIMIT ? OFFSET ?
                         """.trimIndent()).use { ps ->
                             ps.setString(1, tenantId)
+                            ps.setInt(2, limit)
+                            ps.setInt(3, offset)
                             ps.executeQuery().use { rs ->
                                 while (rs.next()) {
                                     val sent = rs.getInt("total_audience_count")
                                     val read = rs.getInt("total_read")
                                     val openRate = if (sent > 0) (read.toDouble() / sent.toDouble()) * 100.0 else 0.0
-                                    camps.add(
+                                    list.add(
                                         CampaignItemResponse(
                                             id = rs.getString("id"),
                                             name = rs.getString("name") ?: "",
@@ -937,9 +1063,9 @@ fun Route.omnichannelSalesRoutes() {
                         }
                     }
                 } catch (_: Exception) {}
-                camps
+                Pair(count, list)
             }
-            call.respond(HttpStatusCode.OK, list)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = camps, total = total, limit = limit, offset = offset))
         }
 
         post("/campaigns") {

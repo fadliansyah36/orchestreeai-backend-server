@@ -3,6 +3,8 @@ package ai.orchestree.backend.api
 import ai.orchestree.backend.models.PresenceEnrollRequest
 import ai.orchestree.backend.models.PresenceVerifyRequest
 import ai.orchestree.backend.security.PresenceService
+import ai.orchestree.backend.util.PagedResponse
+import ai.orchestree.backend.util.PaginationDefaults
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.auth.jwt.JWTPrincipal
@@ -160,8 +162,11 @@ fun Route.presenceRoutes(
                 return@get
             }
 
-            val logs = presenceService.presenceCheckLogRepo.getLogs(userId)
-            call.respond(HttpStatusCode.OK, logs)
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+
+            val (total, logs) = presenceService.presenceCheckLogRepo.getLogsPaginated(userId, limit, offset)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = logs, total = total, limit = limit, offset = offset))
         }
 
         /**

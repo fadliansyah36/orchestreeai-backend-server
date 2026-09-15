@@ -1,6 +1,8 @@
 package ai.orchestree.backend.api
 
 import ai.orchestree.backend.billing.DatabaseManager
+import ai.orchestree.backend.util.PagedResponse
+import ai.orchestree.backend.util.PaginationDefaults
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
@@ -155,22 +157,43 @@ fun Route.attendanceRoutes() {
         get("/history") {
             val userId = call.request.queryParameters["userId"] ?: "user-default"
             val tenantId = call.request.queryParameters["tenantId"] ?: "tenant-default"
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
             val conn = DatabaseManager.getConnection()
             val list = mutableListOf<AttendanceRecordItem>()
+            var count = 0L
+
             if (conn != null) {
                 conn.use { c ->
                     try {
                         c.prepareStatement(
                             """
-                            SELECT id, user_id, tenant_id, created_at, status, check_in_time
+                            SELECT count(*)
                             FROM attendance_records
                             WHERE (user_id = ? OR ? = 'user-default') AND (tenant_id = ? OR tenant_id = 'tenant-default')
-                            ORDER BY created_at DESC LIMIT 50
                             """.trimIndent()
                         ).use { ps ->
                             ps.setString(1, userId)
                             ps.setString(2, userId)
                             ps.setString(3, tenantId)
+                            ps.executeQuery().use { rs ->
+                                if (rs.next()) count = rs.getLong(1)
+                            }
+                        }
+
+                        c.prepareStatement(
+                            """
+                            SELECT id, user_id, tenant_id, created_at, status, check_in_time
+                            FROM attendance_records
+                            WHERE (user_id = ? OR ? = 'user-default') AND (tenant_id = ? OR tenant_id = 'tenant-default')
+                            ORDER BY created_at DESC LIMIT ? OFFSET ?
+                            """.trimIndent()
+                        ).use { ps ->
+                            ps.setString(1, userId)
+                            ps.setString(2, userId)
+                            ps.setString(3, tenantId)
+                            ps.setInt(4, limit)
+                            ps.setInt(5, offset)
                             ps.executeQuery().use { rs ->
                                 while (rs.next()) {
                                     list.add(
@@ -190,7 +213,7 @@ fun Route.attendanceRoutes() {
                     } catch (_: Exception) {}
                 }
             }
-            call.respond(HttpStatusCode.OK, list)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = list, total = count, limit = limit, offset = offset))
         }
     }
 

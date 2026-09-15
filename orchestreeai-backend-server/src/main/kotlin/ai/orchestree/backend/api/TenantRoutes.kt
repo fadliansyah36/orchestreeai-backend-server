@@ -1,10 +1,13 @@
 package ai.orchestree.backend.api
 
+import ai.orchestree.backend.billing.DatabaseManager
 import ai.orchestree.backend.database.SupabaseClientProvider
 import ai.orchestree.backend.database.repositories.identity.TenantRepository
 import ai.orchestree.backend.database.repositories.taskboard.TaskRepository
 import ai.orchestree.backend.database.repositories.workforce.TenantDomainRepository
 import ai.orchestree.backend.modelrouter.ModelRouter
+import ai.orchestree.backend.util.PagedResponse
+import ai.orchestree.backend.util.PaginationDefaults
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
@@ -307,6 +310,109 @@ fun Route.tenantRoutes() {
     val modelRouter = ModelRouter()
     val orchestrationEngine = ai.orchestree.backend.orchestration.OrchestrationEngine(modelRouter = modelRouter)
 
+    val handleReportsQuery: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { c ->
+        val tenantId = c.parameters["id"] ?: c.request.queryParameters["tenantId"] ?: "tenant-default"
+        val limit = PaginationDefaults.parseLimit(c)
+        val offset = PaginationDefaults.parseOffset(c)
+        val (total, reports) = TenantDomainRepository.getDailyReportsPaginated(tenantId, limit, offset)
+        c.respond(HttpStatusCode.OK, PagedResponse(items = reports, total = total, limit = limit, offset = offset))
+    }
+
+    val handleGoalsQuery: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { c ->
+        val tenantId = c.parameters["id"] ?: c.request.queryParameters["tenantId"] ?: "tenant-default"
+        val limit = PaginationDefaults.parseLimit(c)
+        val offset = PaginationDefaults.parseOffset(c)
+        val (total, goals) = TenantDomainRepository.getGoalsPaginated(tenantId, limit, offset)
+        c.respond(HttpStatusCode.OK, PagedResponse(items = goals, total = total, limit = limit, offset = offset))
+    }
+
+    val handleReviewsQuery: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { c ->
+        val tenantId = c.parameters["id"] ?: c.request.queryParameters["tenantId"] ?: "tenant-default"
+        val limit = PaginationDefaults.parseLimit(c)
+        val offset = PaginationDefaults.parseOffset(c)
+        val (total, reviews) = TenantDomainRepository.getReviewsPaginated(tenantId, limit, offset)
+        c.respond(HttpStatusCode.OK, PagedResponse(items = reviews, total = total, limit = limit, offset = offset))
+    }
+
+    val handlePredictionsQuery: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { c ->
+        val tenantId = c.parameters["id"] ?: c.request.queryParameters["tenantId"] ?: "tenant-default"
+        val limit = PaginationDefaults.parseLimit(c)
+        val offset = PaginationDefaults.parseOffset(c)
+        val (total, predictions) = TenantDomainRepository.getPredictionsPaginated(tenantId, limit, offset)
+        c.respond(HttpStatusCode.OK, PagedResponse(items = predictions, total = total, limit = limit, offset = offset))
+    }
+
+    val handleAnomaliesQuery: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { c ->
+        val tenantId = c.parameters["id"] ?: c.request.queryParameters["tenantId"] ?: "tenant-default"
+        val limit = PaginationDefaults.parseLimit(c)
+        val offset = PaginationDefaults.parseOffset(c)
+        val (total, anomalies) = TenantDomainRepository.getSecurityAnomaliesPaginated(tenantId, limit, offset)
+        c.respond(HttpStatusCode.OK, PagedResponse(items = anomalies, total = total, limit = limit, offset = offset))
+    }
+
+    val handleDsrQuery: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { c ->
+        val tenantId = c.parameters["id"] ?: c.request.queryParameters["tenantId"] ?: "tenant-default"
+        val limit = PaginationDefaults.parseLimit(c)
+        val offset = PaginationDefaults.parseOffset(c)
+        val (total, requests) = TenantDomainRepository.getDataSubjectRequestsPaginated(tenantId, limit, offset)
+        c.respond(HttpStatusCode.OK, PagedResponse(items = requests, total = total, limit = limit, offset = offset))
+    }
+
+    val handleAttendanceAnomaliesQuery: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { c ->
+        val tenantId = c.parameters["id"] ?: c.request.queryParameters["tenantId"] ?: "tenant-default"
+        val limit = PaginationDefaults.parseLimit(c)
+        val offset = PaginationDefaults.parseOffset(c)
+        val (total, anomalies) = TenantDomainRepository.getAttendanceAnomaliesPaginated(tenantId, limit, offset)
+        c.respond(HttpStatusCode.OK, PagedResponse(items = anomalies, total = total, limit = limit, offset = offset))
+    }
+
+    val handleAttendanceQuery: suspend (io.ktor.server.application.ApplicationCall) -> Unit = { c ->
+        val tenantId = c.parameters["id"] ?: c.request.queryParameters["tenantId"] ?: "tenant-default"
+        val limit = PaginationDefaults.parseLimit(c)
+        val offset = PaginationDefaults.parseOffset(c)
+        val conn = DatabaseManager.getConnection()
+        var total = 0L
+        val list = mutableListOf<AttendanceRecordItem>()
+        if (conn != null) {
+            conn.use { connInst ->
+                try {
+                    connInst.prepareStatement("SELECT count(*) FROM attendance_records WHERE tenant_id = ? OR tenant_id = 'tenant-default'").use { ps ->
+                        ps.setString(1, tenantId)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next()) total = rs.getLong(1)
+                        }
+                    }
+                    connInst.prepareStatement("""
+                        SELECT id, user_id, tenant_id, created_at, status, check_in_time
+                        FROM attendance_records
+                        WHERE tenant_id = ? OR tenant_id = 'tenant-default'
+                        ORDER BY created_at DESC LIMIT ? OFFSET ?
+                    """.trimIndent()).use { ps ->
+                        ps.setString(1, tenantId)
+                        ps.setInt(2, limit)
+                        ps.setInt(3, offset)
+                        ps.executeQuery().use { rs ->
+                            while (rs.next()) {
+                                list.add(
+                                    AttendanceRecordItem(
+                                        id = rs.getString("id") ?: "",
+                                        userId = rs.getString("user_id") ?: "",
+                                        tenantId = rs.getString("tenant_id") ?: tenantId,
+                                        timestamp = rs.getLong("check_in_time").takeIf { it > 0 } ?: rs.getLong("created_at"),
+                                        type = "CHECK_IN",
+                                        locationName = "Geofence Verified",
+                                        verificationStatus = rs.getString("status") ?: "VERIFIED"
+                                    )
+                                )
+                            }
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+        c.respond(HttpStatusCode.OK, PagedResponse(items = list, total = total, limit = limit, offset = offset))
+    }
+
     route("/tenants/{id}") {
         // Overview dashboard tenant (PRD Master 15.1)
         get("/dashboard/overview") {
@@ -433,8 +539,10 @@ fun Route.tenantRoutes() {
                 return@get
             }
 
-            val tasks = taskRepo.getTasksForUser(userId, boardId)
-            call.respond(HttpStatusCode.OK, tasks)
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            val (total, tasks) = taskRepo.getTasksForUserPaginated(userId, boardId, limit, offset)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = tasks, total = total, limit = limit, offset = offset))
         }
 
         post("/tasks") {
@@ -466,6 +574,26 @@ fun Route.tenantRoutes() {
             val board = TenantDomainRepository.getBoard(boardId, tenantId)
             call.respond(HttpStatusCode.OK, board)
         }
+
+        get("/attendance") {
+            handleAttendanceQuery(call)
+        }
+
+        get("/attendance/anomalies") {
+            handleAttendanceAnomaliesQuery(call)
+        }
+
+        route("/performance") {
+            get("/reports") { handleReportsQuery(call) }
+            get("/goals") { handleGoalsQuery(call) }
+            get("/reviews") { handleReviewsQuery(call) }
+            get("/predictions") { handlePredictionsQuery(call) }
+        }
+
+        route("/security") {
+            get("/anomalies") { handleAnomaliesQuery(call) }
+            get("/dsr") { handleDsrQuery(call) }
+        }
     }
 
     // Inbound Proactive Channel & Task Checklists/Activity (PRD Fase 110, LANGKAH 1.1)
@@ -482,8 +610,10 @@ fun Route.tenantRoutes() {
                 return@get
             }
 
-            val tasks = taskRepo.getTasksForUser(userId, boardId)
-            call.respond(HttpStatusCode.OK, tasks)
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            val (total, tasks) = taskRepo.getTasksForUserPaginated(userId, boardId, limit, offset)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = tasks, total = total, limit = limit, offset = offset))
         }
 
         post("/inbound-channel-message") {
@@ -599,8 +729,10 @@ fun Route.tenantRoutes() {
 
         get("/activity-log") {
             val taskId = call.parameters["taskId"] ?: ""
-            val logs = taskRepo.getActivityLogsForTask(taskId)
-            call.respond(HttpStatusCode.OK, logs)
+            val limit = PaginationDefaults.parseLimit(call)
+            val offset = PaginationDefaults.parseOffset(call)
+            val (total, logs) = taskRepo.getActivityLogsForTaskPaginated(taskId, limit, offset)
+            call.respond(HttpStatusCode.OK, PagedResponse(items = logs, total = total, limit = limit, offset = offset))
         }
 
         patch("/description") {
@@ -921,9 +1053,7 @@ fun Route.tenantRoutes() {
     // Performance Management (Rekomendasi 1)
     route("/performance") {
         get("/reports") {
-            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
-            val reports = TenantDomainRepository.getDailyReports(tenantId)
-            call.respond(HttpStatusCode.OK, reports)
+            handleReportsQuery(call)
         }
 
         post("/reports") {
@@ -934,21 +1064,15 @@ fun Route.tenantRoutes() {
         }
 
         get("/goals") {
-            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
-            val goals = TenantDomainRepository.getGoals(tenantId)
-            call.respond(HttpStatusCode.OK, goals)
+            handleGoalsQuery(call)
         }
 
         get("/reviews") {
-            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
-            val reviews = TenantDomainRepository.getReviews(tenantId)
-            call.respond(HttpStatusCode.OK, reviews)
+            handleReviewsQuery(call)
         }
 
         get("/predictions") {
-            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
-            val predictions = TenantDomainRepository.getPredictions(tenantId)
-            call.respond(HttpStatusCode.OK, predictions)
+            handlePredictionsQuery(call)
         }
 
         get("/executive-briefs") {
@@ -961,15 +1085,11 @@ fun Route.tenantRoutes() {
     // Security & Data Governance / GDPR (Rekomendasi 2)
     route("/security") {
         get("/anomalies") {
-            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
-            val anomalies = TenantDomainRepository.getSecurityAnomalies(tenantId)
-            call.respond(HttpStatusCode.OK, anomalies)
+            handleAnomaliesQuery(call)
         }
 
         get("/dsr") {
-            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
-            val requests = TenantDomainRepository.getDataSubjectRequests(tenantId)
-            call.respond(HttpStatusCode.OK, requests)
+            handleDsrQuery(call)
         }
 
         post("/dsr") {
@@ -983,9 +1103,7 @@ fun Route.tenantRoutes() {
     // Attendance Anomalies (Rekomendasi 3)
     route("/attendance/anomalies") {
         get {
-            val tenantId = call.parameters["id"] ?: call.request.queryParameters["tenantId"] ?: "tenant-default"
-            val anomalies = TenantDomainRepository.getAttendanceAnomalies(tenantId)
-            call.respond(HttpStatusCode.OK, anomalies)
+            handleAttendanceAnomaliesQuery(call)
         }
 
         post("/{anomalyId}/resolve") {

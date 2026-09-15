@@ -64,6 +64,10 @@ data class EventDispatchResult(
 class AiEventEngine {
     private val logger = LoggerFactory.getLogger(AiEventEngine::class.java)
 
+    companion object {
+        val defaultInstance by lazy { AiEventEngine() }
+    }
+
     val definitionsStore = ConcurrentHashMap<String, AiEventDefinition>()
     val eventInstancesStore = ConcurrentHashMap<String, AiEventInstance>()
     val dispatchLogsStore = CopyOnWriteArrayList<AiEventDispatchLog>()
@@ -178,10 +182,74 @@ class AiEventEngine {
     /**
      * Lists events for a tenant.
      */
-    fun listEvents(tenantId: String): List<AiEventInstance> {
-        return eventInstancesStore.values.filter {
+    fun listEvents(tenantId: String): List<AiEventInstance> = listEventsPaginated(tenantId, 50, 0).second
+
+    /**
+     * Lists events for a tenant with pagination (LIMIT/OFFSET on SQL level).
+     */
+    fun listEventsPaginated(tenantId: String, limit: Int = 20, offset: Int = 0): Pair<Long, List<AiEventInstance>> {
+        var count = 0L
+        val dbList = mutableListOf<AiEventInstance>()
+
+        try {
+            DatabaseManager.getConnection()?.use { conn ->
+                conn.prepareStatement("""
+                    SELECT count(*) FROM ai_event_instances 
+                    WHERE tenant_id = ? OR tenant_id = 'tenant-default'
+                """.trimIndent()).use { ps ->
+                    ps.setString(1, tenantId)
+                    ps.executeQuery().use { rs ->
+                        if (rs.next()) count = rs.getLong(1)
+                    }
+                }
+
+                if (count > 0L) {
+                    conn.prepareStatement("""
+                        SELECT id, tenant_id, event_code, entity_reference, source_system,
+                               payload_json, status, severity, is_multi_agent_collaborative,
+                               triggered_at, handled_at
+                        FROM ai_event_instances
+                        WHERE tenant_id = ? OR tenant_id = 'tenant-default'
+                        ORDER BY triggered_at DESC
+                        LIMIT ? OFFSET ?
+                    """.trimIndent()).use { ps ->
+                        ps.setString(1, tenantId)
+                        ps.setInt(2, limit)
+                        ps.setInt(3, offset)
+                        ps.executeQuery().use { rs ->
+                            while (rs.next()) {
+                                dbList.add(
+                                    AiEventInstance(
+                                        id = rs.getString("id"),
+                                        tenantId = rs.getString("tenant_id"),
+                                        eventCode = rs.getString("event_code"),
+                                        entityReference = rs.getString("entity_reference"),
+                                        sourceSystem = rs.getString("source_system") ?: "INTERNAL",
+                                        payloadJson = rs.getString("payload_json") ?: "{}",
+                                        status = rs.getString("status") ?: "NEW",
+                                        severity = rs.getString("severity") ?: "HIGH",
+                                        isMultiAgentCollaborative = rs.getBoolean("is_multi_agent_collaborative"),
+                                        triggeredAt = rs.getLong("triggered_at"),
+                                        handledAt = rs.getLong("handled_at").takeIf { it > 0L }
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    return Pair(count, dbList)
+                }
+            }
+        } catch (e: Exception) {
+            logger.debug("Failed querying ai_event_instances from DB: ${e.message}")
+        }
+
+        val allInMem = eventInstancesStore.values.filter {
             it.tenantId == tenantId || it.tenantId == "tenant-default"
         }.sortedByDescending { it.triggeredAt }
+
+        val total = allInMem.size.toLong()
+        val paged = allInMem.drop(offset).take(limit)
+        return Pair(total, paged)
     }
 
     private fun persistEventInstance(event: AiEventInstance) {

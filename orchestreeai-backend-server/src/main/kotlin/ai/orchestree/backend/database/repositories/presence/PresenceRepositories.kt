@@ -305,8 +305,70 @@ class PresenceCheckLogRepository(
         false
     }
 
-    suspend fun getLogs(userId: String): List<PresenceCheckLog> = withContext(Dispatchers.IO) {
-        memoryLogs.values.filter { it.userId == userId }.sortedByDescending { it.checkedAt }
+    suspend fun getLogs(userId: String): List<PresenceCheckLog> = getLogsPaginated(userId, 100, 0).second
+
+    suspend fun getLogsPaginated(
+        userId: String,
+        limit: Int = 20,
+        offset: Int = 0
+    ): Pair<Long, List<PresenceCheckLog>> = withContext(Dispatchers.IO) {
+        var count = 0L
+        val dbList = mutableListOf<PresenceCheckLog>()
+
+        val conn = getDbConnection()
+        if (conn != null) {
+            try {
+                conn.use { c ->
+                    c.prepareStatement("SELECT count(*) FROM presence_check_log WHERE user_id = ?").use { ps ->
+                        ps.setString(1, userId)
+                        ps.executeQuery().use { rs ->
+                            if (rs.next()) count = rs.getLong(1)
+                        }
+                    }
+
+                    if (count > 0L) {
+                        c.prepareStatement(
+                            """
+                            SELECT id, user_id, check_type, method_used, verification_result, device_id, ip_address, location_approx, checked_at
+                            FROM presence_check_log
+                            WHERE user_id = ?
+                            ORDER BY checked_at DESC
+                            LIMIT ? OFFSET ?
+                            """.trimIndent()
+                        ).use { ps ->
+                            ps.setString(1, userId)
+                            ps.setInt(2, limit)
+                            ps.setInt(3, offset)
+                            ps.executeQuery().use { rs ->
+                                while (rs.next()) {
+                                    dbList.add(
+                                        PresenceCheckLog(
+                                            id = rs.getString("id"),
+                                            userId = rs.getString("user_id"),
+                                            checkType = rs.getString("check_type"),
+                                            methodUsed = rs.getString("method_used"),
+                                            verificationResult = rs.getString("verification_result"),
+                                            deviceId = rs.getString("device_id"),
+                                            ipAddress = rs.getString("ip_address"),
+                                            locationApprox = rs.getString("location_approx"),
+                                            checkedAt = rs.getTimestamp("checked_at").time
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                        return@withContext Pair(count, dbList)
+                    }
+                }
+            } catch (e: Exception) {
+                logger.warn("Failed to query presence_check_log from DB: ${e.message}")
+            }
+        }
+
+        val mem = memoryLogs.values.filter { it.userId == userId }.sortedByDescending { it.checkedAt }
+        val total = mem.size.toLong()
+        val paged = mem.drop(offset).take(limit)
+        Pair(total, paged)
     }
 
     suspend fun getSecurityAuditStats(enrolledUsersCount: Int): PresenceSecurityAuditSummary = withContext(Dispatchers.IO) {
